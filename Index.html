@@ -35,31 +35,33 @@
               <p>Paste text, load a file, or save a link for later.</p>
             </div>
 
-            <div class="input-group input-group-grow">
-              <div class="field-heading">
-                <label for="sourceText">Text</label>
-                <button id="clearTextButton" class="button button-inline" type="button">Clear</button>
+            <div class="source-toolbar">
+              <div class="source-picker" role="tablist" aria-label="Source type">
+                <button id="sourceTextButton" class="source-button is-active" type="button" data-source="text" aria-pressed="true">Text</button>
+                <button id="sourceFileButton" class="source-button" type="button" data-source="file" aria-pressed="false">File</button>
+                <button id="sourceLinkButton" class="source-button" type="button" data-source="link" aria-pressed="false">Link</button>
               </div>
-              <textarea id="sourceText" rows="16" spellcheck="false" placeholder="Paste notes, articles, or draft text here."></textarea>
+              <button id="clearSourceButton" class="button button-inline button-inline-static" type="button">Clear</button>
             </div>
 
-            <div class="input-options">
-              <div class="input-row">
+            <div class="source-workspace">
+              <section id="sourcePaneText" class="source-pane is-active" data-source-panel="text" aria-label="Text source">
+                <textarea id="sourceText" rows="16" spellcheck="false" placeholder="Paste notes, articles, or draft text here."></textarea>
+              </section>
+
+              <section id="sourcePaneFile" class="source-pane" data-source-panel="file" aria-label="File source" aria-hidden="true">
                 <div class="input-group">
-                  <div class="field-heading">
-                    <label for="fileInput">File</label>
-                    <button id="clearFileButton" class="button button-inline" type="button">Clear</button>
-                  </div>
                   <input id="fileInput" type="file" accept=".txt,.md,text/plain,text/markdown" />
+                  <textarea id="filePreview" class="preview-field" rows="12" spellcheck="false" readonly placeholder="Loaded file text will preview here."></textarea>
                 </div>
+              </section>
+
+              <section id="sourcePaneLink" class="source-pane" data-source-panel="link" aria-label="Link source" aria-hidden="true">
                 <div class="input-group">
-                  <div class="field-heading">
-                    <label for="urlInput">Link</label>
-                    <button id="clearLinkButton" class="button button-inline" type="button">Clear</button>
-                  </div>
                   <input id="urlInput" type="url" inputmode="url" placeholder="https://example.com/article" />
+                  <textarea id="linkPreview" class="preview-field" rows="12" spellcheck="false" readonly placeholder="Fetched link text will preview here."></textarea>
                 </div>
-              </div>
+              </section>
             </div>
 
             <div class="actions">
@@ -150,7 +152,8 @@
         </section>
 
         <section id="panel-settings" class="panel-view" role="tabpanel" aria-labelledby="tab-settings" aria-hidden="true" data-panel="settings">
-          <div class="settings-grid">
+          <div class="settings-shell">
+            <div class="settings-grid">
             <section class="panel-card">
               <div class="section-copy">
                 <h2>Pacing</h2>
@@ -238,6 +241,7 @@
                 </label>
               </div>
             </section>
+            </div>
           </div>
         </section>
       </section>
@@ -254,7 +258,7 @@
           <div id="transportBar" class="transport" aria-label="Playback controls">
             <button id="backButton" class="button button-secondary" type="button">Back</button>
             <button id="playPauseButton" class="button button-primary" type="button">Play</button>
-            <button id="forwardButton" class="button button-secondary" type="button">Forward</button>
+            <button id="forwardButton" class="button button-secondary" type="button">Next</button>
           </div>
           <button id="readerMenuButton" class="button button-secondary reader-menu-button" type="button" aria-expanded="false" aria-controls="readerVisualBar readerCadenceBar" aria-label="Toggle reader controls">
             <span class="menu-icon" aria-hidden="true">
