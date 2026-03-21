@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cadence RSVP Reader</title>
+    <meta
+      name="description"
+      content="A lightweight, accessible RSVP reader for the web."
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body data-theme="light" data-font="serif">
+    <a class="skip-link" href="#main">Skip to app</a>
+    <main id="main" class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <p class="eyebrow">Cadence</p>
+          <h1>RSVP Reader</h1>
+        </div>
+        <nav class="tabs" aria-label="Sections" role="tablist">
+          <button id="tab-prepare" class="tab-button is-active" type="button" role="tab" aria-selected="true" aria-controls="panel-prepare" data-tab="prepare">Prepare</button>
+          <button id="tab-reader" class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="panel-reader" data-tab="reader">Read</button>
+        </nav>
+        <button id="tab-settings" class="tab-button tab-button-icon" type="button" role="tab" aria-selected="false" aria-controls="panel-settings" data-tab="settings" aria-label="Settings">
+          <span class="gear-icon" aria-hidden="true">&#9881;</span>
+        </button>
+      </header>
+
+      <section class="panels">
+        <section id="panel-prepare" class="panel-view is-active" role="tabpanel" aria-labelledby="tab-prepare" data-panel="prepare">
+          <div class="panel-card panel-card-wide">
+            <div class="section-copy">
+              <h2>Prepare</h2>
+              <p>Paste text, load a file, or save a link for later.</p>
+            </div>
+
+            <div class="input-group input-group-grow">
+              <div class="field-heading">
+                <label for="sourceText">Text</label>
+                <button id="clearTextButton" class="button button-inline" type="button">Clear</button>
+              </div>
+              <textarea id="sourceText" rows="16" spellcheck="false" placeholder="Paste notes, articles, or draft text here."></textarea>
+            </div>
+
+            <div class="input-options">
+              <div class="input-row">
+                <div class="input-group">
+                  <div class="field-heading">
+                    <label for="fileInput">File</label>
+                    <button id="clearFileButton" class="button button-inline" type="button">Clear</button>
+                  </div>
+                  <input id="fileInput" type="file" accept=".txt,.md,text/plain,text/markdown" />
+                </div>
+                <div class="input-group">
+                  <div class="field-heading">
+                    <label for="urlInput">Link</label>
+                    <button id="clearLinkButton" class="button button-inline" type="button">Clear</button>
+                  </div>
+                  <input id="urlInput" type="url" inputmode="url" placeholder="https://example.com/article" />
+                </div>
+              </div>
+            </div>
+
+            <div class="actions">
+              <button id="prepareButton" class="button button-primary" type="button">Prepare</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="panel-reader" class="panel-view" role="tabpanel" aria-labelledby="tab-reader" aria-hidden="true" data-panel="reader">
+          <div class="reader-panel">
+            <section id="readerVisualBar" class="reader-overlay reader-overlay-top" aria-label="Visual controls">
+              <div class="overlay-grid overlay-grid-visual">
+                <div class="overlay-field">
+                  <label for="drawerFontScaleRange">Scale <span id="drawerFontScaleValue">1.0</span>x</label>
+                  <input id="drawerFontScaleRange" type="range" min="0.8" max="1.6" step="0.1" value="1.0" />
+                </div>
+
+                <div class="overlay-field overlay-field-select">
+                  <label class="sr-only" for="drawerThemeSelect">Tone</label>
+                  <select id="drawerThemeSelect">
+                    <option value="light">Light</option>
+                    <option value="dark">Dark</option>
+                  </select>
+                </div>
+
+                <div class="overlay-field overlay-field-select">
+                  <label class="sr-only" for="drawerFontSelect">Font</label>
+                  <select id="drawerFontSelect">
+                    <option value="serif">Serif</option>
+                    <option value="sans">Sans</option>
+                    <option value="mono">Mono</option>
+                  </select>
+                </div>
+
+                <div class="overlay-field overlay-field-color">
+                  <label class="sr-only" for="focusColorInput">Focus</label>
+                  <input id="focusColorInput" type="color" value="#c83a32" />
+                </div>
+
+                <div class="overlay-toggle-row">
+                  <label class="chip-toggle" for="showFocusLineToggle">
+                    <input id="showFocusLineToggle" type="checkbox" checked />
+                    <span>Line</span>
+                  </label>
+                  <label class="chip-toggle" for="showFocusArrowsToggle">
+                    <input id="showFocusArrowsToggle" type="checkbox" />
+                    <span>Arrows</span>
+                  </label>
+                </div>
+              </div>
+            </section>
+
+            <div class="reader-stage">
+              <div id="focusLine" class="focus-line" aria-hidden="true"></div>
+              <div id="focusArrows" class="focus-arrows" aria-hidden="true">
+                <span class="focus-arrow focus-arrow-left"></span>
+                <span class="focus-arrow focus-arrow-right"></span>
+              </div>
+              <p id="readerFloatingHint" class="reader-floating-hint">Space play. Arrows step. Menu to tune.</p>
+              <div id="readerWord" class="reader-word" aria-live="polite">Ready</div>
+              <p id="readerContext" class="reader-context">Load text in Prepare, then switch back here to read.</p>
+            </div>
+
+            <section class="reader-progress" aria-label="Reader progress">
+              <div class="overlay-progress">
+                <div class="reader-meta">
+                  <p id="progressText">0 of 0 chunks</p>
+                  <p id="remainingText">Estimated remaining: 0s</p>
+                </div>
+                <input id="progressBar" type="range" min="0" max="0" value="0" step="1" aria-label="Jump to chunk position" />
+              </div>
+            </section>
+
+            <section id="readerCadenceBar" class="reader-overlay reader-overlay-bottom" aria-label="Cadence controls">
+              <div class="overlay-grid overlay-grid-cadence">
+                <div class="overlay-field">
+                  <label for="drawerWpmRange">Speed <span id="drawerWpmValue">320</span></label>
+                  <input id="drawerWpmRange" type="range" min="120" max="900" step="10" value="320" />
+                </div>
+
+                <div class="overlay-field">
+                  <label for="drawerChunkSizeRange">Chunk <span id="drawerChunkSizeValue">1</span></label>
+                  <input id="drawerChunkSizeRange" type="range" min="1" max="5" step="1" value="1" />
+                </div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section id="panel-settings" class="panel-view" role="tabpanel" aria-labelledby="tab-settings" aria-hidden="true" data-panel="settings">
+          <div class="settings-grid">
+            <section class="panel-card">
+              <div class="section-copy">
+                <h2>Pacing</h2>
+                <p>Reading rhythm.</p>
+              </div>
+
+              <div class="control">
+                <label for="wpmRange">Speed <span id="wpmValue">320</span></label>
+                <input id="wpmRange" type="range" min="120" max="900" step="10" value="320" />
+              </div>
+
+              <div class="control">
+                <label for="chunkSizeRange">Chunk <span id="chunkSizeValue">1</span></label>
+                <input id="chunkSizeRange" type="range" min="1" max="5" step="1" value="1" />
+              </div>
+
+              <div class="control checkbox-control">
+                <label for="punctuationPause">
+                  <input id="punctuationPause" type="checkbox" checked />
+                  Pause after punctuation
+                </label>
+              </div>
+            </section>
+
+            <section class="panel-card">
+              <div class="section-copy">
+                <h2>Appearance</h2>
+                <p>Visual tuning.</p>
+              </div>
+
+              <div class="control">
+                <label for="fontScaleRange">Scale <span id="fontScaleValue">1.0</span>x</label>
+                <input id="fontScaleRange" type="range" min="0.8" max="1.6" step="0.1" value="1.0" />
+              </div>
+
+              <div class="compact-controls">
+                <div class="control control-compact">
+                  <label class="sr-only" for="settingsFocusColorInput">Focus</label>
+                  <input id="settingsFocusColorInput" type="color" value="#c83a32" />
+                </div>
+
+                <div class="control control-compact">
+                  <label class="sr-only" for="themeSelect">Tone</label>
+                  <select id="themeSelect">
+                    <option value="light">Light</option>
+                    <option value="dark">Dark</option>
+                  </select>
+                </div>
+
+                <div class="control control-compact">
+                  <label class="sr-only" for="fontSelect">Font</label>
+                  <select id="fontSelect">
+                    <option value="serif">Serif</option>
+                    <option value="sans">Sans</option>
+                    <option value="mono">Mono</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="control checkbox-control">
+                <label for="showControlsToggle">
+                  <input id="showControlsToggle" type="checkbox" checked />
+                  Show on-screen controls when not actively playing
+                </label>
+              </div>
+
+              <div class="control checkbox-control">
+                <label for="showFocusControlsToggle">
+                  <input id="showFocusControlsToggle" type="checkbox" />
+                  Keep controls visible during playback
+                </label>
+              </div>
+
+              <div class="control checkbox-control">
+                <label for="settingsShowFocusLineToggle">
+                  <input id="settingsShowFocusLineToggle" type="checkbox" checked />
+                  Show center line guide
+                </label>
+              </div>
+
+              <div class="control checkbox-control">
+                <label for="settingsShowFocusArrowsToggle">
+                  <input id="settingsShowFocusArrowsToggle" type="checkbox" />
+                  Show triangle markers
+                </label>
+              </div>
+            </section>
+          </div>
+        </section>
+      </section>
+
+      <footer id="readerUtilityBar" class="utility-footer" aria-label="Reader status and playback">
+        <div class="prepare-footer-row">
+          <div class="status-block">
+            <p class="status-label">Status</p>
+            <p id="importStatus" class="status-text" aria-live="polite">Waiting for content.</p>
+          </div>
+          <button id="toReaderButton" class="button button-secondary" type="button" disabled>Read</button>
+        </div>
+        <div class="transport-row">
+          <div id="transportBar" class="transport" aria-label="Playback controls">
+            <button id="backButton" class="button button-secondary" type="button">Back</button>
+            <button id="playPauseButton" class="button button-primary" type="button">Play</button>
+            <button id="forwardButton" class="button button-secondary" type="button">Forward</button>
+          </div>
+          <button id="readerMenuButton" class="button button-secondary reader-menu-button" type="button" aria-expanded="false" aria-controls="readerVisualBar readerCadenceBar" aria-label="Toggle reader controls">
+            <span class="menu-icon" aria-hidden="true">
+              <span></span>
+              <span></span>
+              <span></span>
+            </span>
+          </button>
+        </div>
+      </footer>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
