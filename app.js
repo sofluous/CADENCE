@@ -11,14 +11,12 @@
     urlInput: document.getElementById("urlInput"),
     linkPreview: document.getElementById("linkPreview"),
     sourceButtons: Array.prototype.slice.call(document.querySelectorAll("[data-source]")),
-    prepareButton: document.getElementById("prepareButton"),
     toReaderButton: document.getElementById("toReaderButton"),
     clearSourceButton: document.getElementById("clearSourceButton"),
     importStatus: document.getElementById("importStatus"),
     readerWord: document.getElementById("readerWord"),
     readerContext: document.getElementById("readerContext"),
     readerPanel: document.querySelector(".reader-panel"),
-    readerUtilityBar: document.getElementById("readerUtilityBar"),
     readerMenuButton: document.getElementById("readerMenuButton"),
     readerFloatingHint: document.getElementById("readerFloatingHint"),
     focusLine: document.getElementById("focusLine"),
@@ -27,11 +25,13 @@
     backButton: document.getElementById("backButton"),
     forwardButton: document.getElementById("forwardButton"),
     wpmRange: document.getElementById("wpmRange"),
-    chunkSizeRange: document.getElementById("chunkSizeRange"),
-    fontScaleRange: document.getElementById("fontScaleRange"),
+    chunkSizeSelect: document.getElementById("chunkSizeSelect"),
+    fontScaleSelect: document.getElementById("fontScaleSelect"),
     punctuationPause: document.getElementById("punctuationPause"),
-    themeSelect: document.getElementById("themeSelect"),
-    drawerThemeSelect: document.getElementById("drawerThemeSelect"),
+    themeLightButton: document.getElementById("themeLightButton"),
+    themeDarkButton: document.getElementById("themeDarkButton"),
+    drawerThemeLightButton: document.getElementById("drawerThemeLightButton"),
+    drawerThemeDarkButton: document.getElementById("drawerThemeDarkButton"),
     fontSelect: document.getElementById("fontSelect"),
     drawerFontSelect: document.getElementById("drawerFontSelect"),
     showControlsToggle: document.getElementById("showControlsToggle"),
@@ -39,18 +39,14 @@
     settingsFocusColorInput: document.getElementById("settingsFocusColorInput"),
     focusColorInput: document.getElementById("focusColorInput"),
     drawerWpmRange: document.getElementById("drawerWpmRange"),
-    drawerChunkSizeRange: document.getElementById("drawerChunkSizeRange"),
-    drawerFontScaleRange: document.getElementById("drawerFontScaleRange"),
+    drawerChunkSizeSelect: document.getElementById("drawerChunkSizeSelect"),
+    drawerFontScaleSelect: document.getElementById("drawerFontScaleSelect"),
     showFocusLineToggle: document.getElementById("showFocusLineToggle"),
     showFocusArrowsToggle: document.getElementById("showFocusArrowsToggle"),
     settingsShowFocusLineToggle: document.getElementById("settingsShowFocusLineToggle"),
     settingsShowFocusArrowsToggle: document.getElementById("settingsShowFocusArrowsToggle"),
     wpmValue: document.getElementById("wpmValue"),
-    chunkSizeValue: document.getElementById("chunkSizeValue"),
-    fontScaleValue: document.getElementById("fontScaleValue"),
     drawerWpmValue: document.getElementById("drawerWpmValue"),
-    drawerChunkSizeValue: document.getElementById("drawerChunkSizeValue"),
-    drawerFontScaleValue: document.getElementById("drawerFontScaleValue"),
     progressText: document.getElementById("progressText"),
     remainingText: document.getElementById("remainingText"),
     progressBar: document.getElementById("progressBar"),
@@ -78,7 +74,8 @@
     focusLetterColor: "#c83a32",
     showFocusLine: true,
     showFocusArrows: false,
-    controlsOpen: false
+    controlsOpen: false,
+    preparingLink: false
   };
 
   function escapeHtml(text) {
@@ -203,12 +200,22 @@
     }
   }
 
+  function activeSourceHasContent() {
+    if (state.activeSource === "file") {
+      return Boolean(normalizeText(ui.filePreview.value));
+    }
+    if (state.activeSource === "link") {
+      return /^https?:\/\//i.test(ui.urlInput.value.trim()) || Boolean(normalizeText(ui.linkPreview.value));
+    }
+    return Boolean(normalizeText(ui.sourceText.value));
+  }
+
   function setStatus(message) {
     ui.importStatus.textContent = message;
   }
 
   function syncPrepareActions() {
-    ui.toReaderButton.disabled = state.chunks.length === 0;
+    ui.toReaderButton.disabled = state.preparingLink || !activeSourceHasContent();
   }
 
   function setActiveTab(tab) {
@@ -263,13 +270,11 @@
   function updateSettingsUI() {
     ui.wpmRange.value = String(state.wpm);
     ui.drawerWpmRange.value = String(state.wpm);
-    ui.chunkSizeRange.value = String(state.chunkSize);
-    ui.drawerChunkSizeRange.value = String(state.chunkSize);
-    ui.fontScaleRange.value = state.fontScale.toFixed(1);
-    ui.drawerFontScaleRange.value = state.fontScale.toFixed(1);
+    ui.chunkSizeSelect.value = String(state.chunkSize);
+    ui.drawerChunkSizeSelect.value = String(state.chunkSize);
+    ui.fontScaleSelect.value = state.fontScale.toFixed(1);
+    ui.drawerFontScaleSelect.value = state.fontScale.toFixed(1);
     ui.punctuationPause.checked = state.punctuationPause;
-    ui.themeSelect.value = state.theme;
-    ui.drawerThemeSelect.value = state.theme;
     ui.fontSelect.value = state.font;
     ui.drawerFontSelect.value = state.font;
     ui.showControlsToggle.checked = state.showIdleControls;
@@ -281,34 +286,52 @@
     ui.settingsShowFocusLineToggle.checked = state.showFocusLine;
     ui.settingsShowFocusArrowsToggle.checked = state.showFocusArrows;
     ui.wpmValue.textContent = String(state.wpm);
-    ui.drawerWpmValue.textContent = String(state.wpm);
-    ui.chunkSizeValue.textContent = String(state.chunkSize);
-    ui.drawerChunkSizeValue.textContent = String(state.chunkSize);
-    ui.fontScaleValue.textContent = state.fontScale.toFixed(1);
-    ui.drawerFontScaleValue.textContent = state.fontScale.toFixed(1);
+    ui.drawerWpmValue.textContent = state.wpm + " cpm";
+    syncThemeButtons();
     updateTheme();
     updateSourceUI();
     updateReader();
+  }
+
+  function syncThemeButtons() {
+    [
+      [ui.themeLightButton, "light"],
+      [ui.themeDarkButton, "dark"],
+      [ui.drawerThemeLightButton, "light"],
+      [ui.drawerThemeDarkButton, "dark"]
+    ].forEach(function (entry) {
+      var button = entry[0];
+      var theme = entry[1];
+      if (!button) return;
+      var isActive = state.theme === theme;
+      button.classList.toggle("is-active", isActive);
+      button.setAttribute("aria-pressed", isActive ? "true" : "false");
+    });
   }
 
   function updateUrlNotice() {
     var value = ui.urlInput.value.trim();
     if (!value) {
       setStatus("Paste text, load a file, or add a link to prepare the reader.");
+      state.rawText = "";
+      rebuildChunks(false);
       return;
     }
 
     if (/^https?:\/\//i.test(value)) {
-      setStatus("Link detected. If extraction is unavailable, paste the cleaned article text directly.");
+      setStatus("Link detected. Read will fetch and load it.");
       return;
     }
 
     setStatus("That does not look like a valid web link yet.");
+    state.rawText = "";
+    rebuildChunks(false);
   }
 
   function setActiveSource(source) {
     state.activeSource = source === "file" || source === "link" ? source : "text";
     updateSourceUI();
+    syncPrepareActions();
     saveState();
   }
 
@@ -382,7 +405,7 @@
       ui.readerContext.textContent = "Load text in Prepare, then switch back here to read.";
       ui.progressText.textContent = "0 of 0 chunks";
       ui.remainingText.textContent = "Estimated remaining: 0s";
-      ui.readerFloatingHint.textContent = "Prepare text to begin.";
+      ui.readerFloatingHint.textContent = "Prepare text";
       ui.progressBar.max = "0";
       ui.progressBar.value = "0";
       ui.playPauseButton.disabled = true;
@@ -396,9 +419,7 @@
     var remainingChunks = Math.max(0, state.chunks.length - position);
     var estimatedSeconds = Math.ceil((remainingChunks * 60000) / state.wpm / 1000);
     ui.readerContext.textContent = state.playing ? "Focused playback is active." : "Prepared and ready.";
-    ui.readerFloatingHint.textContent = state.playing
-      ? ""
-      : "Space play. Arrows step. Tap to pause.";
+    ui.readerFloatingHint.textContent = state.playing ? "" : "Ready. Tap play.";
     ui.progressText.textContent = position + " of " + state.chunks.length + " chunks";
     ui.remainingText.textContent = "Estimated remaining: " + formatSeconds(estimatedSeconds);
     ui.progressBar.max = String(Math.max(0, state.chunks.length - 1));
@@ -482,60 +503,61 @@
     syncPrepareActions();
   }
 
-  function prepareReader() {
+  function prepareActiveSource() {
     stopPlayback();
     if (state.activeSource === "file") {
       var fileSource = normalizeText(ui.filePreview.value);
       if (!fileSource) {
         setStatus("Choose a file first, then prepare it.");
-        return;
+        return Promise.resolve(false);
       }
-      state.rawText = fileSource;
-      rebuildChunks(false);
-      setStatus("File prepared.");
-      setActiveTab("reader");
-      return;
+      refreshPreparedText(fileSource, "File ready.");
+      return Promise.resolve(true);
     }
 
     if (state.activeSource === "link") {
       var url = ui.urlInput.value.trim();
       if (!/^https?:\/\//i.test(url)) {
         setStatus("Paste a valid link first.");
-        return;
+        return Promise.resolve(false);
       }
       setStatus("Fetching link text...");
-      ui.prepareButton.disabled = true;
-      fetchLinkText(url)
+      state.preparingLink = true;
+      return fetchLinkText(url)
         .then(function (text) {
           if (!text) {
             throw new Error("No readable text found at that link.");
           }
           ui.linkPreview.value = text;
-          state.rawText = text;
-          rebuildChunks(false);
-          setStatus("Link prepared.");
-          setActiveTab("reader");
+          refreshPreparedText(text, "Link ready.");
+          return true;
         })
         .catch(function (error) {
+          state.rawText = "";
+          rebuildChunks(false);
           setStatus(error && error.message ? error.message : "Link import failed. Paste the article text instead.");
+          return false;
         })
         .finally(function () {
-          ui.prepareButton.disabled = false;
+          state.preparingLink = false;
+          syncPrepareActions();
         });
-      return;
     }
 
     var source = normalizeText(ui.sourceText.value);
     if (!source) {
-      state.rawText = "";
-      rebuildChunks(false);
-      setStatus("Paste text or import a file to prepare the reader.");
-      return;
+      refreshPreparedText("", "Paste text or import a file to prepare the reader.");
+      return Promise.resolve(false);
     }
-    state.rawText = source;
-    rebuildChunks(false);
-    setStatus("Text prepared.");
-    setActiveTab("reader");
+    refreshPreparedText(source, "Text ready.");
+    return Promise.resolve(true);
+  }
+
+  function handleReadAction() {
+    prepareActiveSource().then(function (ready) {
+      if (!ready) return;
+      setActiveTab("reader");
+    });
   }
 
   function clearTextOnly() {
@@ -556,6 +578,7 @@
       state.rawText = "";
       rebuildChunks(false);
     }
+    syncPrepareActions();
   }
 
   function clearLinkOnly() {
@@ -566,6 +589,7 @@
       rebuildChunks(false);
     }
     updateUrlNotice();
+    syncPrepareActions();
   }
 
   function readFile(file) {
@@ -575,7 +599,8 @@
       var result = typeof event.target.result === "string" ? event.target.result : "";
       ui.filePreview.value = normalizeText(result);
       setActiveSource("file");
-      setStatus("Loaded " + file.name + ". Prepare the reader when ready.");
+      refreshPreparedText(ui.filePreview.value, "Loaded " + file.name + ".");
+      syncPrepareActions();
     };
     reader.onerror = function () {
       setStatus("Unable to read that file.");
@@ -619,6 +644,18 @@
     saveState();
   }
 
+  function setTheme(theme) {
+    state.theme = theme === "dark" ? "dark" : "light";
+    updateSettingsUI();
+    saveState();
+  }
+
+  function refreshPreparedText(text, statusMessage) {
+    state.rawText = normalizeText(text || "");
+    rebuildChunks(false);
+    setStatus(statusMessage);
+  }
+
   function handleProgressJump(value) {
     if (!state.chunks.length) return;
     stopPlayback();
@@ -643,10 +680,9 @@
       });
     });
 
-    ui.prepareButton.addEventListener("click", prepareReader);
     ui.toReaderButton.addEventListener("click", function () {
       if (ui.toReaderButton.disabled) return;
-      setActiveTab("reader");
+      handleReadAction();
     });
     ui.clearSourceButton.addEventListener("click", function () {
       if (state.activeSource === "file") {
@@ -680,11 +716,15 @@
       readFile(event.target.files && event.target.files[0]);
     });
     ui.urlInput.addEventListener("input", updateUrlNotice);
+    ui.urlInput.addEventListener("input", syncPrepareActions);
     ui.sourceText.addEventListener("input", function () {
       if (normalizeText(ui.sourceText.value)) {
         setActiveSource("text");
       }
-      setStatus("Text updated. Prepare the reader to apply changes.");
+      refreshPreparedText(
+        ui.sourceText.value,
+        normalizeText(ui.sourceText.value) ? "Text ready." : "Paste text or import a file to prepare the reader."
+      );
     });
     ui.progressBar.addEventListener("input", function () {
       handleProgressJump(ui.progressBar.value);
@@ -697,18 +737,18 @@
       handleWpmChange(ui.drawerWpmRange.value);
     });
 
-    ui.chunkSizeRange.addEventListener("input", function () {
-      handleChunkSizeChange(ui.chunkSizeRange.value);
+    ui.chunkSizeSelect.addEventListener("change", function () {
+      handleChunkSizeChange(ui.chunkSizeSelect.value);
     });
-    ui.drawerChunkSizeRange.addEventListener("input", function () {
-      handleChunkSizeChange(ui.drawerChunkSizeRange.value);
+    ui.drawerChunkSizeSelect.addEventListener("change", function () {
+      handleChunkSizeChange(ui.drawerChunkSizeSelect.value);
     });
 
-    ui.fontScaleRange.addEventListener("input", function () {
-      handleFontScaleChange(ui.fontScaleRange.value);
+    ui.fontScaleSelect.addEventListener("change", function () {
+      handleFontScaleChange(ui.fontScaleSelect.value);
     });
-    ui.drawerFontScaleRange.addEventListener("input", function () {
-      handleFontScaleChange(ui.drawerFontScaleRange.value);
+    ui.drawerFontScaleSelect.addEventListener("change", function () {
+      handleFontScaleChange(ui.drawerFontScaleSelect.value);
     });
 
     ui.punctuationPause.addEventListener("change", function () {
@@ -720,16 +760,10 @@
         scheduleNextTick();
       }
     });
-    ui.themeSelect.addEventListener("change", function () {
-      state.theme = ui.themeSelect.value === "dark" ? "dark" : "light";
-      updateSettingsUI();
-      saveState();
-    });
-    ui.drawerThemeSelect.addEventListener("change", function () {
-      state.theme = ui.drawerThemeSelect.value === "dark" ? "dark" : "light";
-      updateSettingsUI();
-      saveState();
-    });
+    ui.themeLightButton.addEventListener("click", function () { setTheme("light"); });
+    ui.themeDarkButton.addEventListener("click", function () { setTheme("dark"); });
+    ui.drawerThemeLightButton.addEventListener("click", function () { setTheme("light"); });
+    ui.drawerThemeDarkButton.addEventListener("click", function () { setTheme("dark"); });
 
     ui.fontSelect.addEventListener("change", function () {
       var value = ui.fontSelect.value;
@@ -847,7 +881,6 @@
     } else {
       setStatus("Waiting for content.");
     }
-    ui.readerFloatingHint.textContent = "Space play. Arrows step. Menu to tune.";
   }
 
   init();

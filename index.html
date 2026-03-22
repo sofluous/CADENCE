@@ -30,11 +30,6 @@
       <section class="panels">
         <section id="panel-prepare" class="panel-view is-active" role="tabpanel" aria-labelledby="tab-prepare" data-panel="prepare">
           <div class="panel-card panel-card-wide">
-            <div class="section-copy">
-              <h2>Prepare</h2>
-              <p>Paste text, load a file, or save a link for later.</p>
-            </div>
-
             <div class="source-toolbar">
               <div class="source-picker" role="tablist" aria-label="Source type">
                 <button id="sourceTextButton" class="source-button is-active" type="button" data-source="text" aria-pressed="true">Text</button>
@@ -64,8 +59,8 @@
               </section>
             </div>
 
-            <div class="actions">
-              <button id="prepareButton" class="button button-primary" type="button">Prepare</button>
+            <div class="prepare-status-row">
+              <p id="importStatus" class="status-text prepare-status-text" aria-live="polite">Waiting for content.</p>
             </div>
           </div>
         </section>
@@ -74,20 +69,7 @@
           <div class="reader-panel">
             <section id="readerVisualBar" class="reader-overlay reader-overlay-top" aria-label="Visual controls">
               <div class="overlay-grid overlay-grid-visual">
-                <div class="overlay-field">
-                  <label for="drawerFontScaleRange">Scale <span id="drawerFontScaleValue">1.0</span>x</label>
-                  <input id="drawerFontScaleRange" type="range" min="0.8" max="1.6" step="0.1" value="1.0" />
-                </div>
-
-                <div class="overlay-field overlay-field-select">
-                  <label class="sr-only" for="drawerThemeSelect">Tone</label>
-                  <select id="drawerThemeSelect">
-                    <option value="light">Light</option>
-                    <option value="dark">Dark</option>
-                  </select>
-                </div>
-
-                <div class="overlay-field overlay-field-select">
+                <div class="overlay-field overlay-field-select overlay-field-font">
                   <label class="sr-only" for="drawerFontSelect">Font</label>
                   <select id="drawerFontSelect">
                     <option value="serif">Serif</option>
@@ -96,20 +78,54 @@
                   </select>
                 </div>
 
-                <div class="overlay-field overlay-field-color">
-                  <label class="sr-only" for="focusColorInput">Focus</label>
-                  <input id="focusColorInput" type="color" value="#c83a32" />
+                <div class="overlay-field overlay-field-select overlay-field-scale">
+                  <label class="sr-only" for="drawerFontScaleSelect">Reader scale</label>
+                  <select id="drawerFontScaleSelect">
+                    <option value="0.8">0.8x</option>
+                    <option value="0.9">0.9x</option>
+                    <option value="1.0" selected>1.0x</option>
+                    <option value="1.1">1.1x</option>
+                    <option value="1.2">1.2x</option>
+                    <option value="1.3">1.3x</option>
+                    <option value="1.4">1.4x</option>
+                    <option value="1.5">1.5x</option>
+                    <option value="1.6">1.6x</option>
+                  </select>
                 </div>
 
                 <div class="overlay-toggle-row">
+                  <div class="theme-segmented theme-segmented-inline" role="group" aria-label="Theme">
+                    <button id="drawerThemeLightButton" class="theme-button is-active" type="button" data-theme-option="light" aria-pressed="true">
+                      <span aria-hidden="true">&#9728;</span>
+                    </button>
+                    <button id="drawerThemeDarkButton" class="theme-button" type="button" data-theme-option="dark" aria-pressed="false">
+                      <span aria-hidden="true">&#9790;</span>
+                    </button>
+                  </div>
                   <label class="chip-toggle" for="showFocusLineToggle">
                     <input id="showFocusLineToggle" type="checkbox" checked />
-                    <span>Line</span>
+                    <span class="chip-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" focusable="false">
+                        <path d="M12 5v14" />
+                      </svg>
+                    </span>
+                    <span class="sr-only">Line</span>
                   </label>
                   <label class="chip-toggle" for="showFocusArrowsToggle">
                     <input id="showFocusArrowsToggle" type="checkbox" />
-                    <span>Arrows</span>
+                    <span class="chip-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" focusable="false">
+                        <path d="M5 12h14" />
+                        <path d="M8 9l-3 3 3 3" />
+                        <path d="M16 9l3 3-3 3" />
+                      </svg>
+                    </span>
+                    <span class="sr-only">Arrows</span>
                   </label>
+                  <div class="overlay-field overlay-field-color">
+                    <label class="sr-only" for="focusColorInput">Focus</label>
+                    <input id="focusColorInput" type="color" value="#c83a32" />
+                  </div>
                 </div>
               </div>
             </section>
@@ -137,14 +153,22 @@
 
             <section id="readerCadenceBar" class="reader-overlay reader-overlay-bottom" aria-label="Cadence controls">
               <div class="overlay-grid overlay-grid-cadence">
-                <div class="overlay-field">
-                  <label for="drawerWpmRange">Speed <span id="drawerWpmValue">320</span></label>
-                  <input id="drawerWpmRange" type="range" min="120" max="900" step="10" value="320" />
+                <div class="overlay-field overlay-field-select overlay-field-chunk">
+                  <label class="sr-only" for="drawerChunkSizeSelect">Chunk size</label>
+                  <select id="drawerChunkSizeSelect">
+                    <option value="1">1 chunk</option>
+                    <option value="2">2 chunks</option>
+                    <option value="3">3 chunks</option>
+                    <option value="4">4 chunks</option>
+                    <option value="5">5 chunks</option>
+                  </select>
                 </div>
 
-                <div class="overlay-field">
-                  <label for="drawerChunkSizeRange">Chunk <span id="drawerChunkSizeValue">1</span></label>
-                  <input id="drawerChunkSizeRange" type="range" min="1" max="5" step="1" value="1" />
+                <div class="overlay-field overlay-field-cpm">
+                  <div class="overlay-slider-row">
+                    <input id="drawerWpmRange" type="range" min="120" max="900" step="10" value="320" aria-label="Cadence speed" />
+                    <span id="drawerWpmValue" class="overlay-value">320 cpm</span>
+                  </div>
                 </div>
               </div>
             </section>
@@ -165,9 +189,15 @@
                 <input id="wpmRange" type="range" min="120" max="900" step="10" value="320" />
               </div>
 
-              <div class="control">
-                <label for="chunkSizeRange">Chunk <span id="chunkSizeValue">1</span></label>
-                <input id="chunkSizeRange" type="range" min="1" max="5" step="1" value="1" />
+              <div class="control control-select">
+                <label for="chunkSizeSelect">Chunk</label>
+                <select id="chunkSizeSelect">
+                  <option value="1">1 word</option>
+                  <option value="2">2 words</option>
+                  <option value="3">3 words</option>
+                  <option value="4">4 words</option>
+                  <option value="5">5 words</option>
+                </select>
               </div>
 
               <div class="control checkbox-control">
@@ -184,25 +214,16 @@
                 <p>Visual tuning.</p>
               </div>
 
-              <div class="control">
-                <label for="fontScaleRange">Scale <span id="fontScaleValue">1.0</span>x</label>
-                <input id="fontScaleRange" type="range" min="0.8" max="1.6" step="0.1" value="1.0" />
+              <div class="theme-segmented" role="group" aria-label="Theme">
+                <button id="themeLightButton" class="theme-button is-active" type="button" data-theme-option="light" aria-pressed="true">
+                  <span aria-hidden="true">&#9728;</span>
+                </button>
+                <button id="themeDarkButton" class="theme-button" type="button" data-theme-option="dark" aria-pressed="false">
+                  <span aria-hidden="true">&#9790;</span>
+                </button>
               </div>
 
               <div class="compact-controls">
-                <div class="control control-compact">
-                  <label class="sr-only" for="settingsFocusColorInput">Focus</label>
-                  <input id="settingsFocusColorInput" type="color" value="#c83a32" />
-                </div>
-
-                <div class="control control-compact">
-                  <label class="sr-only" for="themeSelect">Tone</label>
-                  <select id="themeSelect">
-                    <option value="light">Light</option>
-                    <option value="dark">Dark</option>
-                  </select>
-                </div>
-
                 <div class="control control-compact">
                   <label class="sr-only" for="fontSelect">Font</label>
                   <select id="fontSelect">
@@ -210,6 +231,26 @@
                     <option value="sans">Sans</option>
                     <option value="mono">Mono</option>
                   </select>
+                </div>
+
+                <div class="control control-compact">
+                  <label class="sr-only" for="fontScaleSelect">Scale</label>
+                  <select id="fontScaleSelect">
+                    <option value="0.8">0.8x</option>
+                    <option value="0.9">0.9x</option>
+                    <option value="1.0" selected>1.0x</option>
+                    <option value="1.1">1.1x</option>
+                    <option value="1.2">1.2x</option>
+                    <option value="1.3">1.3x</option>
+                    <option value="1.4">1.4x</option>
+                    <option value="1.5">1.5x</option>
+                    <option value="1.6">1.6x</option>
+                  </select>
+                </div>
+
+                <div class="control control-compact control-color-compact">
+                  <label class="sr-only" for="settingsFocusColorInput">Focus</label>
+                  <input id="settingsFocusColorInput" type="color" value="#c83a32" />
                 </div>
               </div>
 
@@ -248,10 +289,6 @@
 
       <footer id="readerUtilityBar" class="utility-footer" aria-label="Reader status and playback">
         <div class="prepare-footer-row">
-          <div class="status-block">
-            <p class="status-label">Status</p>
-            <p id="importStatus" class="status-text" aria-live="polite">Waiting for content.</p>
-          </div>
           <button id="toReaderButton" class="button button-secondary" type="button" disabled>Read</button>
         </div>
         <div class="transport-row">
