@@ -15,10 +15,11 @@
     clearSourceButton: document.getElementById("clearSourceButton"),
     importStatus: document.getElementById("importStatus"),
     readerWord: document.getElementById("readerWord"),
+    readerStage: document.querySelector(".reader-stage"),
+    readerMeasure: document.getElementById("readerMeasure"),
     readerContext: document.getElementById("readerContext"),
     readerPanel: document.querySelector(".reader-panel"),
     readerMenuButton: document.getElementById("readerMenuButton"),
-    readerFloatingHint: document.getElementById("readerFloatingHint"),
     focusLine: document.getElementById("focusLine"),
     focusArrows: document.getElementById("focusArrows"),
     playPauseButton: document.getElementById("playPauseButton"),
@@ -35,7 +36,6 @@
     fontSelect: document.getElementById("fontSelect"),
     drawerFontSelect: document.getElementById("drawerFontSelect"),
     showControlsToggle: document.getElementById("showControlsToggle"),
-    showFocusControlsToggle: document.getElementById("showFocusControlsToggle"),
     settingsFocusColorInput: document.getElementById("settingsFocusColorInput"),
     focusColorInput: document.getElementById("focusColorInput"),
     drawerWpmRange: document.getElementById("drawerWpmRange"),
@@ -64,18 +64,23 @@
     wpm: 320,
     chunkSize: 1,
     fontScale: 1,
+    effectiveScale: 1,
+    maxSafeScale: 1.6,
     punctuationPause: true,
     activeTab: "prepare",
     theme: "light",
     font: "serif",
     activeSource: "text",
     showIdleControls: true,
-    showFocusControls: false,
     focusLetterColor: "#c83a32",
     showFocusLine: true,
     showFocusArrows: false,
     controlsOpen: false,
-    preparingLink: false
+    preparingLink: false,
+    fitStatus: "unmeasured",
+    widestChunkText: "",
+    widestChunkWidth: 0,
+    availableWidth: 0
   };
 
   function escapeHtml(text) {
@@ -153,13 +158,14 @@
           wpm: state.wpm,
           chunkSize: state.chunkSize,
           fontScale: state.fontScale,
+          effectiveScale: state.effectiveScale,
+          maxSafeScale: state.maxSafeScale,
           punctuationPause: state.punctuationPause,
           activeTab: state.activeTab,
           theme: state.theme,
           font: state.font,
           activeSource: state.activeSource,
           showIdleControls: state.showIdleControls,
-          showFocusControls: state.showFocusControls,
           focusLetterColor: state.focusLetterColor,
           showFocusLine: state.showFocusLine,
           showFocusArrows: state.showFocusArrows,
@@ -181,13 +187,14 @@
       state.wpm = clampNumber(parsed.wpm, 120, 900, 320);
       state.chunkSize = clampNumber(parsed.chunkSize, 1, 5, 1);
       state.fontScale = clampNumber(parsed.fontScale, 0.8, 1.6, 1);
+      state.effectiveScale = clampNumber(parsed.effectiveScale, 0.8, 1.6, state.fontScale);
+      state.maxSafeScale = clampNumber(parsed.maxSafeScale, 0.8, 1.6, 1.6);
       state.punctuationPause = parsed.punctuationPause !== false;
       state.activeTab = parsed.activeTab === "reader" || parsed.activeTab === "settings" ? parsed.activeTab : "prepare";
       state.theme = parsed.theme === "dark" ? "dark" : "light";
       state.font = parsed.font === "sans" || parsed.font === "mono" ? parsed.font : "serif";
       state.activeSource = parsed.activeSource === "file" || parsed.activeSource === "link" ? parsed.activeSource : "text";
       state.showIdleControls = parsed.showIdleControls !== false;
-      state.showFocusControls = parsed.showFocusControls === true;
       state.focusLetterColor =
         typeof parsed.focusLetterColor === "string" && /^#[0-9a-f]{6}$/i.test(parsed.focusLetterColor)
           ? parsed.focusLetterColor
@@ -212,6 +219,39 @@
 
   function setStatus(message) {
     ui.importStatus.textContent = message;
+  }
+
+  function setFont(font) {
+    state.font = font === "sans" || font === "mono" ? font : "serif";
+    updateSettingsUI();
+    saveState();
+  }
+
+  function setFocusLetterColor(color) {
+    state.focusLetterColor = color;
+    updateSettingsUI();
+    saveState();
+  }
+
+  function setGuideVisibility(key, visible) {
+    state[key] = visible;
+    updateSettingsUI();
+    saveState();
+  }
+
+  function setShowIdleControls(visible) {
+    state.showIdleControls = visible;
+    updateSettingsUI();
+    saveState();
+  }
+
+  function bindMirroredInputs(inputs, eventName, callback) {
+    inputs.forEach(function (input) {
+      if (!input) return;
+      input.addEventListener(eventName, function () {
+        callback(input);
+      });
+    });
   }
 
   function syncPrepareActions() {
@@ -241,13 +281,91 @@
     saveState();
   }
 
+  function getMeasurementCandidates(chunks) {
+    if (chunks.length <= 600) return chunks.slice();
+    return chunks
+      .slice()
+      .sort(function (left, right) {
+        return right.length - left.length;
+      })
+      .slice(0, 80);
+  }
+
+  function measureTextWidth(text) {
+    if (!ui.readerMeasure) return 0;
+    ui.readerMeasure.textContent = text;
+    return ui.readerMeasure.getBoundingClientRect().width;
+  }
+
+  function measureAvailableReaderWidth() {
+    if (!ui.readerStage) return 0;
+    var stageRect = ui.readerStage.getBoundingClientRect();
+    var stageStyle = window.getComputedStyle(ui.readerStage);
+    var stagePadding =
+      parseFloat(stageStyle.paddingLeft || "0") +
+      parseFloat(stageStyle.paddingRight || "0");
+    var isMobile = window.innerWidth <= 760;
+    var stageWidth = Math.max(0, stageRect.width - stagePadding);
+    var widthFactor = 0.9;
+
+    if (isMobile) {
+      if (state.chunkSize >= 4) {
+        widthFactor = 0.64;
+      } else if (state.chunkSize === 3) {
+        widthFactor = 0.7;
+      } else if (state.chunkSize === 2) {
+        widthFactor = 0.78;
+      } else {
+        widthFactor = 0.86;
+      }
+    } else if (state.chunkSize >= 4) {
+      widthFactor = 0.76;
+    } else if (state.chunkSize === 3) {
+      widthFactor = 0.82;
+    }
+
+    return Math.max(0, stageWidth * widthFactor);
+  }
+
+  function recalculateChunkFit() {
+    if (!state.chunks.length) {
+      state.availableWidth = 0;
+      state.widestChunkText = "";
+      state.widestChunkWidth = 0;
+      state.maxSafeScale = 1.6;
+      state.effectiveScale = state.fontScale;
+      state.fitStatus = "unmeasured";
+      return;
+    }
+
+    var candidates = getMeasurementCandidates(state.chunks);
+    var widestChunkText = "";
+    var widestChunkWidth = 0;
+    candidates.forEach(function (chunk) {
+      var width = measureTextWidth(chunk);
+      if (width > widestChunkWidth) {
+        widestChunkWidth = width;
+        widestChunkText = chunk;
+      }
+    });
+
+    var availableWidth = measureAvailableReaderWidth();
+    var rawMaxSafeScale = widestChunkWidth > 0 ? availableWidth / widestChunkWidth : 1.6;
+    var maxSafeScale = clampNumber(rawMaxSafeScale, 0.45, 1.6, 1.6);
+    state.availableWidth = availableWidth;
+    state.widestChunkText = widestChunkText;
+    state.widestChunkWidth = widestChunkWidth;
+    state.maxSafeScale = maxSafeScale;
+    state.effectiveScale = Math.min(state.fontScale, maxSafeScale);
+    state.fitStatus = state.effectiveScale < state.fontScale ? "clamped" : "ok";
+  }
+
   function updateTheme() {
     ui.body.setAttribute("data-theme", state.theme);
     ui.body.setAttribute("data-font", state.font);
-    document.documentElement.style.setProperty("--reader-scale", String(state.fontScale));
+    document.documentElement.style.setProperty("--reader-scale", String(state.effectiveScale));
     document.documentElement.style.setProperty("--focus-letter", state.focusLetterColor);
     ui.body.classList.toggle("hide-idle-controls", !state.showIdleControls && !state.playing);
-    ui.body.classList.toggle("show-focus-controls", state.showFocusControls);
     ui.readerPanel.classList.toggle("controls-open", state.controlsOpen);
     ui.readerMenuButton.setAttribute("aria-expanded", state.controlsOpen ? "true" : "false");
     ui.focusLine.hidden = !state.showFocusLine;
@@ -268,6 +386,10 @@
   }
 
   function updateSettingsUI() {
+    ui.body.setAttribute("data-theme", state.theme);
+    ui.body.setAttribute("data-font", state.font);
+    document.documentElement.style.setProperty("--focus-letter", state.focusLetterColor);
+    recalculateChunkFit();
     ui.wpmRange.value = String(state.wpm);
     ui.drawerWpmRange.value = String(state.wpm);
     ui.chunkSizeSelect.value = String(state.chunkSize);
@@ -278,7 +400,6 @@
     ui.fontSelect.value = state.font;
     ui.drawerFontSelect.value = state.font;
     ui.showControlsToggle.checked = state.showIdleControls;
-    ui.showFocusControlsToggle.checked = state.showFocusControls;
     ui.settingsFocusColorInput.value = state.focusLetterColor;
     ui.focusColorInput.value = state.focusLetterColor;
     ui.showFocusLineToggle.checked = state.showFocusLine;
@@ -287,6 +408,8 @@
     ui.settingsShowFocusArrowsToggle.checked = state.showFocusArrows;
     ui.wpmValue.textContent = String(state.wpm);
     ui.drawerWpmValue.textContent = state.wpm + " cpm";
+    ui.fontScaleSelect.title = state.fitStatus === "clamped" ? "Max safe: " + state.maxSafeScale.toFixed(1) + "x" : "";
+    ui.drawerFontScaleSelect.title = state.fitStatus === "clamped" ? "Max safe: " + state.maxSafeScale.toFixed(1) + "x" : "";
     syncThemeButtons();
     updateTheme();
     updateSourceUI();
@@ -405,7 +528,6 @@
       ui.readerContext.textContent = "Load text in Prepare, then switch back here to read.";
       ui.progressText.textContent = "0 of 0 chunks";
       ui.remainingText.textContent = "Estimated remaining: 0s";
-      ui.readerFloatingHint.textContent = "Prepare text";
       ui.progressBar.max = "0";
       ui.progressBar.value = "0";
       ui.playPauseButton.disabled = true;
@@ -418,8 +540,13 @@
     var position = Math.min(state.index + 1, state.chunks.length);
     var remainingChunks = Math.max(0, state.chunks.length - position);
     var estimatedSeconds = Math.ceil((remainingChunks * 60000) / state.wpm / 1000);
-    ui.readerContext.textContent = state.playing ? "Focused playback is active." : "Prepared and ready.";
-    ui.readerFloatingHint.textContent = state.playing ? "" : "Ready. Tap play.";
+    ui.readerContext.textContent = state.playing
+      ? "Focused playback is active."
+      : state.fitStatus === "clamped" && state.maxSafeScale < 0.7
+        ? "Prepared and ready. Large chunks are very tight on this screen."
+        : state.fitStatus === "clamped"
+          ? "Prepared and ready. Scale limited to " + state.maxSafeScale.toFixed(1) + "x."
+          : "Prepared and ready.";
     ui.progressText.textContent = position + " of " + state.chunks.length + " chunks";
     ui.remainingText.textContent = "Estimated remaining: " + formatSeconds(estimatedSeconds);
     ui.progressBar.max = String(Math.max(0, state.chunks.length - 1));
@@ -730,25 +857,16 @@
       handleProgressJump(ui.progressBar.value);
     });
 
-    ui.wpmRange.addEventListener("input", function () {
-      handleWpmChange(ui.wpmRange.value);
-    });
-    ui.drawerWpmRange.addEventListener("input", function () {
-      handleWpmChange(ui.drawerWpmRange.value);
+    bindMirroredInputs([ui.wpmRange, ui.drawerWpmRange], "input", function (input) {
+      handleWpmChange(input.value);
     });
 
-    ui.chunkSizeSelect.addEventListener("change", function () {
-      handleChunkSizeChange(ui.chunkSizeSelect.value);
-    });
-    ui.drawerChunkSizeSelect.addEventListener("change", function () {
-      handleChunkSizeChange(ui.drawerChunkSizeSelect.value);
+    bindMirroredInputs([ui.chunkSizeSelect, ui.drawerChunkSizeSelect], "change", function (input) {
+      handleChunkSizeChange(input.value);
     });
 
-    ui.fontScaleSelect.addEventListener("change", function () {
-      handleFontScaleChange(ui.fontScaleSelect.value);
-    });
-    ui.drawerFontScaleSelect.addEventListener("change", function () {
-      handleFontScaleChange(ui.drawerFontScaleSelect.value);
+    bindMirroredInputs([ui.fontScaleSelect, ui.drawerFontScaleSelect], "change", function (input) {
+      handleFontScaleChange(input.value);
     });
 
     ui.punctuationPause.addEventListener("change", function () {
@@ -760,64 +878,29 @@
         scheduleNextTick();
       }
     });
-    ui.themeLightButton.addEventListener("click", function () { setTheme("light"); });
-    ui.themeDarkButton.addEventListener("click", function () { setTheme("dark"); });
-    ui.drawerThemeLightButton.addEventListener("click", function () { setTheme("light"); });
-    ui.drawerThemeDarkButton.addEventListener("click", function () { setTheme("dark"); });
-
-    ui.fontSelect.addEventListener("change", function () {
-      var value = ui.fontSelect.value;
-      state.font = value === "sans" || value === "mono" ? value : "serif";
-      updateSettingsUI();
-      saveState();
+    [ui.themeLightButton, ui.drawerThemeLightButton].forEach(function (button) {
+      button.addEventListener("click", function () { setTheme("light"); });
     });
-    ui.drawerFontSelect.addEventListener("change", function () {
-      var value = ui.drawerFontSelect.value;
-      state.font = value === "sans" || value === "mono" ? value : "serif";
-      updateSettingsUI();
-      saveState();
+    [ui.themeDarkButton, ui.drawerThemeDarkButton].forEach(function (button) {
+      button.addEventListener("click", function () { setTheme("dark"); });
+    });
+
+    bindMirroredInputs([ui.fontSelect, ui.drawerFontSelect], "change", function (input) {
+      setFont(input.value);
     });
 
     ui.showControlsToggle.addEventListener("change", function () {
-      state.showIdleControls = ui.showControlsToggle.checked;
-      updateSettingsUI();
-      saveState();
+      setShowIdleControls(ui.showControlsToggle.checked);
     });
 
-    ui.showFocusControlsToggle.addEventListener("change", function () {
-      state.showFocusControls = ui.showFocusControlsToggle.checked;
-      updateSettingsUI();
-      saveState();
+    bindMirroredInputs([ui.settingsFocusColorInput, ui.focusColorInput], "input", function (input) {
+      setFocusLetterColor(input.value);
     });
-    ui.settingsFocusColorInput.addEventListener("input", function () {
-      state.focusLetterColor = ui.settingsFocusColorInput.value;
-      updateSettingsUI();
-      saveState();
+    bindMirroredInputs([ui.showFocusLineToggle, ui.settingsShowFocusLineToggle], "change", function (input) {
+      setGuideVisibility("showFocusLine", input.checked);
     });
-    ui.focusColorInput.addEventListener("input", function () {
-      state.focusLetterColor = ui.focusColorInput.value;
-      updateSettingsUI();
-      saveState();
-    });
-    ui.showFocusLineToggle.addEventListener("change", function () {
-      state.showFocusLine = ui.showFocusLineToggle.checked;
-      updateSettingsUI();
-      saveState();
-    });
-    ui.settingsShowFocusLineToggle.addEventListener("change", function () {
-      state.showFocusLine = ui.settingsShowFocusLineToggle.checked;
-      updateSettingsUI();
-      saveState();
-    });
-    ui.showFocusArrowsToggle.addEventListener("change", function () {
-      state.showFocusArrows = ui.showFocusArrowsToggle.checked;
-      updateSettingsUI();
-      saveState();
-    });
-    ui.settingsShowFocusArrowsToggle.addEventListener("change", function () {
-      state.showFocusArrows = ui.settingsShowFocusArrowsToggle.checked;
-      updateSettingsUI();
-      saveState();
+    bindMirroredInputs([ui.showFocusArrowsToggle, ui.settingsShowFocusArrowsToggle], "change", function (input) {
+      setGuideVisibility("showFocusArrows", input.checked);
     });
 
     document.addEventListener("keydown", function (event) {
@@ -864,6 +947,14 @@
       interruptPlayback();
     });
 
+    window.addEventListener("resize", function () {
+      updateSettingsUI();
+    });
+
+    window.addEventListener("orientationchange", function () {
+      updateSettingsUI();
+    });
+
   }
 
   function init() {
@@ -881,6 +972,9 @@
     } else {
       setStatus("Waiting for content.");
     }
+    window.requestAnimationFrame(function () {
+      updateSettingsUI();
+    });
   }
 
   init();

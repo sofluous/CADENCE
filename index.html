@@ -136,8 +136,8 @@
                 <span class="focus-arrow focus-arrow-left"></span>
                 <span class="focus-arrow focus-arrow-right"></span>
               </div>
-              <p id="readerFloatingHint" class="reader-floating-hint">Space play. Arrows step. Menu to tune.</p>
               <div id="readerWord" class="reader-word" aria-live="polite">Ready</div>
+              <div id="readerMeasure" class="reader-measure" aria-hidden="true"></div>
               <p id="readerContext" class="reader-context">Load text in Prepare, then switch back here to read.</p>
             </div>
 
@@ -178,108 +178,101 @@
         <section id="panel-settings" class="panel-view" role="tabpanel" aria-labelledby="tab-settings" aria-hidden="true" data-panel="settings">
           <div class="settings-shell">
             <div class="settings-grid">
-            <section class="panel-card">
+            <section class="panel-card panel-card-settings">
               <div class="section-copy">
-                <h2>Pacing</h2>
-                <p>Reading rhythm.</p>
+                <h2>Settings</h2>
+                <p>Cadence and display.</p>
               </div>
 
-              <div class="control">
-                <label for="wpmRange">Speed <span id="wpmValue">320</span></label>
-                <input id="wpmRange" type="range" min="120" max="900" step="10" value="320" />
-              </div>
+              <div class="settings-section">
+                <h3>Cadence</h3>
+                <div class="control">
+                  <label for="wpmRange">Speed <span id="wpmValue">320</span></label>
+                  <input id="wpmRange" type="range" min="120" max="900" step="10" value="320" />
+                </div>
 
-              <div class="control control-select">
-                <label for="chunkSizeSelect">Chunk</label>
-                <select id="chunkSizeSelect">
-                  <option value="1">1 word</option>
-                  <option value="2">2 words</option>
-                  <option value="3">3 words</option>
-                  <option value="4">4 words</option>
-                  <option value="5">5 words</option>
-                </select>
-              </div>
-
-              <div class="control checkbox-control">
-                <label for="punctuationPause">
-                  <input id="punctuationPause" type="checkbox" checked />
-                  Pause after punctuation
-                </label>
-              </div>
-            </section>
-
-            <section class="panel-card">
-              <div class="section-copy">
-                <h2>Appearance</h2>
-                <p>Visual tuning.</p>
-              </div>
-
-              <div class="theme-segmented" role="group" aria-label="Theme">
-                <button id="themeLightButton" class="theme-button is-active" type="button" data-theme-option="light" aria-pressed="true">
-                  <span aria-hidden="true">&#9728;</span>
-                </button>
-                <button id="themeDarkButton" class="theme-button" type="button" data-theme-option="dark" aria-pressed="false">
-                  <span aria-hidden="true">&#9790;</span>
-                </button>
-              </div>
-
-              <div class="compact-controls">
-                <div class="control control-compact">
-                  <label class="sr-only" for="fontSelect">Font</label>
-                  <select id="fontSelect">
-                    <option value="serif">Serif</option>
-                    <option value="sans">Sans</option>
-                    <option value="mono">Mono</option>
+                <div class="control control-select">
+                  <label for="chunkSizeSelect">Chunk</label>
+                  <select id="chunkSizeSelect">
+                    <option value="1">1 chunk</option>
+                    <option value="2">2 chunks</option>
+                    <option value="3">3 chunks</option>
+                    <option value="4">4 chunks</option>
+                    <option value="5">5 chunks</option>
                   </select>
                 </div>
 
-                <div class="control control-compact">
-                  <label class="sr-only" for="fontScaleSelect">Scale</label>
-                  <select id="fontScaleSelect">
-                    <option value="0.8">0.8x</option>
-                    <option value="0.9">0.9x</option>
-                    <option value="1.0" selected>1.0x</option>
-                    <option value="1.1">1.1x</option>
-                    <option value="1.2">1.2x</option>
-                    <option value="1.3">1.3x</option>
-                    <option value="1.4">1.4x</option>
-                    <option value="1.5">1.5x</option>
-                    <option value="1.6">1.6x</option>
-                  </select>
-                </div>
-
-                <div class="control control-compact control-color-compact">
-                  <label class="sr-only" for="settingsFocusColorInput">Focus</label>
-                  <input id="settingsFocusColorInput" type="color" value="#c83a32" />
+                <div class="control checkbox-control">
+                  <label for="punctuationPause">
+                    <input id="punctuationPause" type="checkbox" checked />
+                    Pause after punctuation
+                  </label>
                 </div>
               </div>
 
-              <div class="control checkbox-control">
-                <label for="showControlsToggle">
-                  <input id="showControlsToggle" type="checkbox" checked />
-                  Show on-screen controls when not actively playing
-                </label>
-              </div>
+              <div class="settings-section">
+                <h3>Display</h3>
 
-              <div class="control checkbox-control">
-                <label for="showFocusControlsToggle">
-                  <input id="showFocusControlsToggle" type="checkbox" />
-                  Keep controls visible during playback
-                </label>
-              </div>
+                <div class="theme-segmented" role="group" aria-label="Theme">
+                  <button id="themeLightButton" class="theme-button is-active" type="button" data-theme-option="light" aria-pressed="true">
+                    <span aria-hidden="true">&#9728;</span>
+                  </button>
+                  <button id="themeDarkButton" class="theme-button" type="button" data-theme-option="dark" aria-pressed="false">
+                    <span aria-hidden="true">&#9790;</span>
+                  </button>
+                </div>
 
-              <div class="control checkbox-control">
-                <label for="settingsShowFocusLineToggle">
-                  <input id="settingsShowFocusLineToggle" type="checkbox" checked />
-                  Show center line guide
-                </label>
-              </div>
+                <div class="compact-controls">
+                  <div class="control control-compact">
+                    <label class="sr-only" for="fontSelect">Font</label>
+                    <select id="fontSelect">
+                      <option value="serif">Serif</option>
+                      <option value="sans">Sans</option>
+                      <option value="mono">Mono</option>
+                    </select>
+                  </div>
 
-              <div class="control checkbox-control">
-                <label for="settingsShowFocusArrowsToggle">
-                  <input id="settingsShowFocusArrowsToggle" type="checkbox" />
-                  Show triangle markers
-                </label>
+                  <div class="control control-compact">
+                    <label class="sr-only" for="fontScaleSelect">Scale</label>
+                    <select id="fontScaleSelect">
+                      <option value="0.8">0.8x</option>
+                      <option value="0.9">0.9x</option>
+                      <option value="1.0" selected>1.0x</option>
+                      <option value="1.1">1.1x</option>
+                      <option value="1.2">1.2x</option>
+                      <option value="1.3">1.3x</option>
+                      <option value="1.4">1.4x</option>
+                      <option value="1.5">1.5x</option>
+                      <option value="1.6">1.6x</option>
+                    </select>
+                  </div>
+
+                  <div class="control control-compact control-color-compact">
+                    <label class="sr-only" for="settingsFocusColorInput">Focus</label>
+                    <input id="settingsFocusColorInput" type="color" value="#c83a32" />
+                  </div>
+                </div>
+
+                <div class="control checkbox-control">
+                  <label for="showControlsToggle">
+                    <input id="showControlsToggle" type="checkbox" checked />
+                    Show on-screen controls when not actively playing
+                  </label>
+                </div>
+
+                <div class="control checkbox-control">
+                  <label for="settingsShowFocusLineToggle">
+                    <input id="settingsShowFocusLineToggle" type="checkbox" checked />
+                    Show center line guide
+                  </label>
+                </div>
+
+                <div class="control checkbox-control">
+                  <label for="settingsShowFocusArrowsToggle">
+                    <input id="settingsShowFocusArrowsToggle" type="checkbox" />
+                    Show triangle markers
+                  </label>
+                </div>
               </div>
             </section>
             </div>
