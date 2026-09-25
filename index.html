@@ -44,11 +44,14 @@
                   </button>
                   <div id="libraryMenu" class="library-menu" aria-hidden="true">
                     <p id="librarySummary">No saved items yet.</p>
-                    <button id="clearLibraryButton" class="button button-inline button-inline-static" type="button">Clear Library</button>
+                    <button id="clearLibraryButton" class="menu-action menu-action-danger" type="button">Clear Library</button>
                   </div>
                 </div>
               </div>
               <div id="libraryList" class="library-list" aria-live="polite"></div>
+              <div class="library-panel-actions">
+                <button id="openAddButton" class="button button-primary" type="button">Add</button>
+              </div>
             </section>
           </div>
 
@@ -70,23 +73,45 @@
 
                 <section id="sourcePaneFile" class="source-pane" data-source-panel="file" aria-label="File source" aria-hidden="true">
                   <div class="input-group">
-                    <input id="fileInput" type="file" accept=".txt,.md,.markdown,.rtf,.pdf,.epub,text/plain,text/markdown,application/rtf,application/pdf,application/epub+zip" />
-                    <textarea id="filePreview" class="preview-field" rows="12" spellcheck="false" readonly placeholder="Loaded file text will preview here."></textarea>
+                    <div class="source-input-row">
+                      <input id="fileInput" type="file" accept=".txt,.md,.markdown,.rtf,.pdf,.epub,text/plain,text/markdown,application/rtf,application/pdf,application/epub+zip" />
+                      <button class="button button-secondary source-reload-button" type="button" data-reload-source disabled>Reload</button>
+                    </div>
+                    <textarea id="filePreview" class="preview-field" rows="12" spellcheck="false" placeholder="Loaded file text will preview here."></textarea>
                   </div>
                 </section>
 
                 <section id="sourcePaneLink" class="source-pane" data-source-panel="link" aria-label="Link source" aria-hidden="true">
                   <div class="input-group">
-                    <input id="urlInput" type="url" inputmode="url" placeholder="https://example.com/article" />
-                    <textarea id="linkPreview" class="preview-field" rows="12" spellcheck="false" readonly placeholder="Fetched link text will preview here."></textarea>
+                    <div class="source-input-row">
+                      <input id="urlInput" type="url" inputmode="url" placeholder="https://example.com/article" />
+                      <button class="button button-secondary source-reload-button" type="button" data-reload-source disabled>Reload</button>
+                    </div>
+                    <textarea id="linkPreview" class="preview-field" rows="12" spellcheck="false" placeholder="Fetched link text will preview here."></textarea>
                   </div>
                 </section>
               </div>
 
               <div class="prepare-status-row">
                 <p id="importStatus" class="status-text prepare-status-text" aria-live="polite">Waiting for content.</p>
+                <div class="prepare-actions">
+                  <button id="cancelAddButton" class="button button-secondary" type="button">Cancel</button>
+                  <button id="saveLibraryButton" class="button button-primary" type="button" disabled>Confirm</button>
+                </div>
               </div>
 
+            </div>
+          </section>
+
+          <section id="previewPanel" class="preview-panel" aria-label="Library item preview" aria-hidden="true">
+            <div class="preview-panel-card">
+              <div class="preview-panel-header">
+                <h2 id="previewTitle">Preview</h2>
+                <button id="closePreviewButton" class="icon-button" type="button" aria-label="Close preview">
+                  <span aria-hidden="true">&times;</span>
+                </button>
+              </div>
+              <textarea id="previewText" class="preview-textarea" readonly spellcheck="false"></textarea>
             </div>
           </section>
         </section>
@@ -121,6 +146,26 @@
                   </div>
                 </div>
 
+                <div class="overlay-field overlay-field-select overlay-field-chunk">
+                  <label class="sr-only" for="drawerChunkSizeSelect">Chunk size</label>
+                  <select id="drawerChunkSizeSelect">
+                    <option value="1">1 chunk</option>
+                    <option value="2">2 chunks</option>
+                    <option value="3">3 chunks</option>
+                    <option value="4">4 chunks</option>
+                    <option value="5">5 chunks</option>
+                  </select>
+                </div>
+
+                <div class="overlay-field overlay-field-cpm">
+                  <div class="overlay-slider-row">
+                    <button id="drawerWpmMinus" class="step-button" type="button" aria-label="Decrease cadence">-</button>
+                    <input id="drawerWpmRange" type="range" min="120" max="900" step="10" value="320" aria-label="Cadence speed" />
+                    <span id="drawerWpmValue" class="overlay-value">320 cpm</span>
+                    <button id="drawerWpmPlus" class="step-button" type="button" aria-label="Increase cadence">+</button>
+                  </div>
+                </div>
+                
                 <div class="overlay-toggle-row">
                   <label class="chip-toggle" for="showFocusLineToggle">
                     <input id="showFocusLineToggle" type="checkbox" checked />
@@ -156,6 +201,7 @@
                     <span aria-hidden="true">&#9790;</span>
                   </button>
                 </div>
+
               </div>
             </section>
 
@@ -169,36 +215,27 @@
               <div id="readerMeasure" class="reader-measure" aria-hidden="true"></div>
               <p id="readerContext" class="reader-context">Open a library item to read.</p>
             </div>
-
             <section class="reader-progress" aria-label="Reader progress">
               <div class="overlay-progress">
+                <div class="transport-row">
+                  <div id="transportBar" class="transport" aria-label="Playback controls">
+                    <button id="backButton" class="button button-secondary" type="button">Back</button>
+                    <button id="playPauseButton" class="button button-primary" type="button">Play</button>
+                    <button id="forwardButton" class="button button-secondary" type="button">Next</button>
+                  </div>
+                  <button id="readerMenuButton" class="button button-secondary reader-menu-button" type="button" aria-expanded="false" aria-pressed="false" aria-controls="readerVisualBar" aria-label="Toggle reader controls">
+                    <span class="menu-icon" aria-hidden="true">
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </span>
+                  </button>
+                </div>
                 <div class="reader-meta">
                   <p id="progressText">0 of 0 chunks</p>
                   <p id="remainingText">Estimated remaining: 0s</p>
                 </div>
                 <input id="progressBar" type="range" min="0" max="0" value="0" step="1" aria-label="Jump to chunk position" />
-              </div>
-            </section>
-
-            <section id="readerCadenceBar" class="reader-overlay reader-overlay-bottom" aria-label="Cadence controls">
-              <div class="overlay-grid overlay-grid-cadence">
-                <div class="overlay-field overlay-field-select overlay-field-chunk">
-                  <label class="sr-only" for="drawerChunkSizeSelect">Chunk size</label>
-                  <select id="drawerChunkSizeSelect">
-                    <option value="1">1 chunk</option>
-                    <option value="2">2 chunks</option>
-                    <option value="3">3 chunks</option>
-                    <option value="4">4 chunks</option>
-                    <option value="5">5 chunks</option>
-                  </select>
-                </div>
-
-                <div class="overlay-field overlay-field-cpm">
-                  <div class="overlay-slider-row">
-                    <input id="drawerWpmRange" type="range" min="120" max="900" step="10" value="320" aria-label="Cadence speed" />
-                    <span id="drawerWpmValue" class="overlay-value">320 cpm</span>
-                  </div>
-                </div>
               </div>
             </section>
           </div>
@@ -309,31 +346,10 @@
         </section>
       </section>
 
-      <footer id="readerUtilityBar" class="utility-footer" aria-label="Reader status and playback">
-        <div class="library-footer-row">
-          <button id="openAddButton" class="button button-primary" type="button">Add</button>
-          <div class="add-footer-actions" aria-label="Add item actions">
-            <button id="cancelAddButton" class="button button-secondary" type="button">Cancel</button>
-            <button id="saveLibraryButton" class="button button-primary" type="button" disabled>Confirm</button>
-          </div>
-        </div>
-        <div class="transport-row">
-          <div id="transportBar" class="transport" aria-label="Playback controls">
-            <button id="backButton" class="button button-secondary" type="button">Back</button>
-            <button id="playPauseButton" class="button button-primary" type="button">Play</button>
-            <button id="forwardButton" class="button button-secondary" type="button">Next</button>
-          </div>
-          <button id="readerMenuButton" class="button button-secondary reader-menu-button" type="button" aria-expanded="false" aria-controls="readerVisualBar readerCadenceBar" aria-label="Toggle reader controls">
-            <span class="menu-icon" aria-hidden="true">
-              <span></span>
-              <span></span>
-              <span></span>
-            </span>
-          </button>
-        </div>
-      </footer>
     </main>
 
+    <script src="./vendor/jszip.min.js"></script>
+    <script src="./vendor/pdf.min.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

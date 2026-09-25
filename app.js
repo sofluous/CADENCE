@@ -11,12 +11,17 @@
     urlInput: document.getElementById("urlInput"),
     linkPreview: document.getElementById("linkPreview"),
     saveLibraryButton: document.getElementById("saveLibraryButton"),
+    reloadSourceButtons: Array.prototype.slice.call(document.querySelectorAll("[data-reload-source]")),
     openAddButton: document.getElementById("openAddButton"),
     cancelAddButton: document.getElementById("cancelAddButton"),
     addPanel: document.getElementById("addPanel"),
     clearLibraryButton: document.getElementById("clearLibraryButton"),
     libraryMenuButton: document.getElementById("libraryMenuButton"),
     libraryMenu: document.getElementById("libraryMenu"),
+    previewPanel: document.getElementById("previewPanel"),
+    previewTitle: document.getElementById("previewTitle"),
+    previewText: document.getElementById("previewText"),
+    closePreviewButton: document.getElementById("closePreviewButton"),
     librarySearch: document.getElementById("librarySearch"),
     libraryViewList: document.getElementById("libraryViewList"),
     libraryViewGrid: document.getElementById("libraryViewGrid"),
@@ -50,6 +55,8 @@
     settingsFocusColorInput: document.getElementById("settingsFocusColorInput"),
     focusColorInput: document.getElementById("focusColorInput"),
     drawerWpmRange: document.getElementById("drawerWpmRange"),
+    drawerWpmMinus: document.getElementById("drawerWpmMinus"),
+    drawerWpmPlus: document.getElementById("drawerWpmPlus"),
     drawerChunkSizeSelect: document.getElementById("drawerChunkSizeSelect"),
     drawerFontScaleSelect: document.getElementById("drawerFontScaleSelect"),
     showFocusLineToggle: document.getElementById("showFocusLineToggle"),
@@ -86,6 +93,8 @@
     currentLibraryId: "",
     currentSourceLabel: "",
     currentSourceType: "text",
+    sourceSnapshotText: "",
+    sourceDirty: false,
     showIdleControls: true,
     focusLetterColor: "#c83a32",
     showFocusLine: true,
@@ -96,11 +105,19 @@
     librarySearch: "",
     libraryView: "list",
     libraryMenuOpen: false,
+    itemMenuId: "",
+    previewItemId: "",
     fitStatus: "unmeasured",
     widestChunkText: "",
     widestChunkWidth: 0,
     availableWidth: 0
   };
+  var lastLibraryTap = { id: "", time: 0 };
+  var currentFile = null;
+
+  if (window.pdfjsLib && window.pdfjsLib.GlobalWorkerOptions) {
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = "./vendor/pdf.worker.min.js";
+  }
 
   function escapeHtml(text) {
     return text
@@ -258,6 +275,8 @@
           currentLibraryId: state.currentLibraryId,
           currentSourceLabel: state.currentSourceLabel,
           currentSourceType: state.currentSourceType,
+          sourceSnapshotText: state.sourceSnapshotText,
+          sourceDirty: state.sourceDirty,
           wpm: state.wpm,
           chunkSize: state.chunkSize,
           fontScale: state.fontScale,
@@ -269,6 +288,8 @@
           librarySearch: state.librarySearch,
           libraryView: state.libraryView,
           libraryMenuOpen: state.libraryMenuOpen,
+          itemMenuId: state.itemMenuId,
+          previewItemId: state.previewItemId,
           theme: state.theme,
           font: state.font,
           activeSource: state.activeSource,
@@ -313,6 +334,8 @@
         parsed.currentSourceType === "file" || parsed.currentSourceType === "link" || parsed.currentSourceType === "library"
           ? parsed.currentSourceType
           : "text";
+      state.sourceSnapshotText = typeof parsed.sourceSnapshotText === "string" ? parsed.sourceSnapshotText : "";
+      state.sourceDirty = parsed.sourceDirty === true;
       state.showIdleControls = parsed.showIdleControls !== false;
       state.focusLetterColor =
         typeof parsed.focusLetterColor === "string" && /^#[0-9a-f]{6}$/i.test(parsed.focusLetterColor)
@@ -325,6 +348,8 @@
       state.librarySearch = typeof parsed.librarySearch === "string" ? parsed.librarySearch : "";
       state.libraryView = parsed.libraryView === "grid" ? "grid" : "list";
       state.libraryMenuOpen = parsed.libraryMenuOpen === true;
+      state.itemMenuId = typeof parsed.itemMenuId === "string" ? parsed.itemMenuId : "";
+      state.previewItemId = typeof parsed.previewItemId === "string" ? parsed.previewItemId : "";
     } catch (error) {
       console.warn("Unable to load saved state.", error);
     }
@@ -342,6 +367,63 @@
 
   function setStatus(message) {
     ui.importStatus.textContent = message;
+  }
+
+  function currentEditableSourceText() {
+    if (state.activeSource === "file") return ui.filePreview.value;
+    if (state.activeSource === "link") return ui.linkPreview.value;
+    return ui.sourceText.value;
+  }
+
+  function setSourceSnapshot(text) {
+    state.sourceSnapshotText = normalizeText(text || "");
+    state.sourceDirty = false;
+    syncPrepareActions();
+  }
+
+  function updateSourceDirty() {
+    if (state.activeSource === "file" || state.activeSource === "link") {
+      state.sourceDirty = normalizeText(currentEditableSourceText()) !== state.sourceSnapshotText;
+    } else {
+      state.sourceDirty = false;
+    }
+    syncPrepareActions();
+    saveState();
+  }
+
+  function reloadActiveSource() {
+    if (state.activeSource === "file") {
+      if (!currentFile) {
+        setStatus("Choose the file again to reload it.");
+        return;
+      }
+      readFile(currentFile);
+    } else if (state.activeSource === "link") {
+      var url = ui.urlInput.value.trim();
+      if (!/^https?:\/\//i.test(url)) {
+        setStatus("Paste a valid link before reloading.");
+        return;
+      }
+      setStatus("Reloading link text...");
+      state.preparingLink = true;
+      syncPrepareActions();
+      fetchLinkText(url)
+        .then(function (text) {
+          if (!text) throw new Error("No readable text found at that link.");
+          ui.linkPreview.value = text;
+          setSourceSnapshot(text);
+          state.currentSourceType = "link";
+          state.currentSourceLabel = url;
+          refreshPreparedText(text, "Reloaded link text.");
+        })
+        .catch(function (error) {
+          setStatus(error && error.message ? error.message : "Unable to reload that link.");
+        })
+        .finally(function () {
+          state.preparingLink = false;
+          syncPrepareActions();
+        });
+    }
   }
 
   function renderLibrary() {
@@ -386,8 +468,9 @@
         var progress = item.chunkCount ? Math.round(((item.lastIndex || 0) / item.chunkCount) * 100) : 0;
         var metrics = item.metrics || {};
         var activeClass = item.id === state.currentLibraryId ? " is-active" : "";
+        var menuOpen = item.id === state.itemMenuId;
         return (
-          '<article class="library-item' + activeClass + '">' +
+          '<article class="library-item' + activeClass + '" tabindex="0" data-library-item="' + escapeHtml(item.id) + '">' +
           '<div class="library-item-main">' +
           '<h3>' + escapeHtml(item.title || "Untitled") + "</h3>" +
           '<p>' +
@@ -407,9 +490,16 @@
           " cpm" +
           "</p>" +
           "</div>" +
-          '<div class="library-item-actions">' +
-          '<button class="button button-secondary" type="button" data-library-load="' + escapeHtml(item.id) + '">Read</button>' +
-          '<button class="button button-inline button-inline-static" type="button" data-library-delete="' + escapeHtml(item.id) + '">Delete</button>' +
+          '<div class="library-item-menu-wrap">' +
+          '<button class="icon-button item-menu-button" type="button" aria-label="Item actions" aria-expanded="' + (menuOpen ? "true" : "false") + '" data-item-menu="' + escapeHtml(item.id) + '">' +
+          '<span aria-hidden="true">&#8942;</span>' +
+          "</button>" +
+          '<div class="item-menu' + (menuOpen ? " is-open" : "") + '" aria-hidden="' + (menuOpen ? "false" : "true") + '">' +
+          '<button class="menu-action" type="button" data-library-preview="' + escapeHtml(item.id) + '">Preview</button>' +
+          '<button class="menu-action" type="button" data-library-mark-read="' + escapeHtml(item.id) + '">Mark as read</button>' +
+          '<button class="menu-action" type="button" data-library-mark-unread="' + escapeHtml(item.id) + '">Mark as unread</button>' +
+          '<button class="menu-action menu-action-danger" type="button" data-library-delete="' + escapeHtml(item.id) + '">Delete</button>' +
+          "</div>" +
           "</div>" +
           "</article>"
         );
@@ -444,8 +534,9 @@
       var item = upsertCurrentLibraryItem(state.rawText, state.currentSourceType, state.currentSourceLabel);
       if (!item) return false;
       setStatus("Saved to Library.");
-      renderLibrary();
       setAddPanelOpen(false);
+      resetPreparedSource();
+      renderLibrary();
       saveState();
       return true;
     });
@@ -467,6 +558,84 @@
     setActiveTab("reader");
     renderLibrary();
     saveState();
+  }
+
+  function selectLibraryItem(id) {
+    var item = state.library.find(function (entry) {
+      return entry.id === id;
+    });
+    if (!item) return;
+    state.currentLibraryId = item.id;
+    state.currentSourceType = "library";
+    state.currentSourceLabel = item.title || "Library item";
+    state.rawText = item.text;
+    state.index = clampNumber(item.lastIndex, 0, Math.max(0, tokenize(item.text, state.chunkSize).length - 1), 0);
+    rebuildChunks(true);
+    renderLibrary();
+    saveState();
+  }
+
+  function setItemMenuOpen(id) {
+    state.itemMenuId = state.itemMenuId === id ? "" : id;
+    renderLibrary();
+    saveState();
+  }
+
+  function openPreview(id) {
+    var item = state.library.find(function (entry) {
+      return entry.id === id;
+    });
+    if (!item) return;
+    state.previewItemId = id;
+    ui.previewTitle.textContent = item.title || "Preview";
+    ui.previewText.value = item.text || "";
+    ui.previewPanel.setAttribute("aria-hidden", "false");
+    state.itemMenuId = "";
+    renderLibrary();
+    saveState();
+  }
+
+  function closePreview() {
+    state.previewItemId = "";
+    state.itemMenuId = "";
+    ui.previewPanel.setAttribute("aria-hidden", "true");
+    ui.previewText.value = "";
+    renderLibrary();
+    saveState();
+  }
+
+  function markLibraryItem(id, read) {
+    var item = state.library.find(function (entry) {
+      return entry.id === id;
+    });
+    if (!item) return;
+    item.lastIndex = read ? Math.max(0, (item.chunkCount || tokenize(item.text, state.chunkSize).length) - 1) : 0;
+    item.updatedAt = new Date().toISOString();
+    state.itemMenuId = "";
+    renderLibrary();
+    saveState();
+  }
+
+  function resetPreparedSource() {
+    ui.sourceText.value = "";
+    ui.fileInput.value = "";
+    ui.filePreview.value = "";
+    ui.urlInput.value = "";
+    ui.linkPreview.value = "";
+    currentFile = null;
+    state.rawText = "";
+    state.chunks = [];
+    state.index = 0;
+    state.activeSource = "text";
+    state.currentLibraryId = "";
+    state.currentSourceType = "text";
+    state.currentSourceLabel = "";
+    state.sourceSnapshotText = "";
+    state.sourceDirty = false;
+    updateSourceUI();
+    updateReader();
+    syncPrepareActions();
+    setStatus("Waiting for content.");
   }
 
   function deleteLibraryItem(id) {
@@ -526,7 +695,14 @@
   }
 
   function syncPrepareActions() {
+    var reloadDisabled =
+      state.preparingLink ||
+      !state.sourceDirty ||
+      (state.activeSource !== "file" && state.activeSource !== "link");
     ui.saveLibraryButton.disabled = state.preparingLink || !activeSourceHasContent();
+    ui.reloadSourceButtons.forEach(function (button) {
+      button.disabled = reloadDisabled;
+    });
   }
 
   function setAddPanelOpen(open) {
@@ -681,7 +857,9 @@
     document.documentElement.style.setProperty("--focus-letter", state.focusLetterColor);
     ui.body.classList.toggle("hide-idle-controls", !state.showIdleControls && !state.playing);
     ui.readerPanel.classList.toggle("controls-open", state.controlsOpen);
+    ui.readerMenuButton.classList.toggle("is-active", state.controlsOpen);
     ui.readerMenuButton.setAttribute("aria-expanded", state.controlsOpen ? "true" : "false");
+    ui.readerMenuButton.setAttribute("aria-pressed", state.controlsOpen ? "true" : "false");
     ui.focusLine.hidden = !state.showFocusLine;
     ui.focusArrows.hidden = !state.showFocusArrows;
   }
@@ -823,6 +1001,139 @@
         .replace(/[{}]/g, "")
         .replace(/\\[a-zA-Z]+-?\d* ?/g, "")
     );
+  }
+
+  function extractTextFromDocumentMarkup(markup) {
+    var parser = new DOMParser();
+    var doc = parser.parseFromString(markup, "application/xhtml+xml");
+    if (doc.querySelector("parsererror")) {
+      doc = parser.parseFromString(markup, "text/html");
+    }
+    Array.prototype.forEach.call(
+      doc.querySelectorAll("script, style, nav, aside, header, footer, metadata"),
+      function (node) {
+        node.remove();
+      }
+    );
+    var blocks = Array.prototype.slice.call(doc.querySelectorAll("h1, h2, h3, h4, h5, h6, p, li, blockquote"));
+    var text = blocks
+      .map(function (node) {
+        return normalizeText(node.textContent || "");
+      })
+      .filter(Boolean)
+      .join("\n\n");
+    return text || normalizeText((doc.body || doc.documentElement).textContent || "");
+  }
+
+  function pathDirectory(path) {
+    var index = path.lastIndexOf("/");
+    return index >= 0 ? path.slice(0, index + 1) : "";
+  }
+
+  function resolveZipPath(basePath, relativePath) {
+    var parts = (pathDirectory(basePath) + relativePath).split("/");
+    var resolved = [];
+    parts.forEach(function (part) {
+      if (!part || part === ".") return;
+      if (part === "..") {
+        resolved.pop();
+      } else {
+        resolved.push(part);
+      }
+    });
+    return resolved.join("/");
+  }
+
+  function extractEpubText(file) {
+    if (!window.JSZip) {
+      return Promise.reject(new Error("EPUB import needs JSZip bundled before it can extract text."));
+    }
+
+    return window.JSZip.loadAsync(file)
+      .then(function (zip) {
+        var containerFile = zip.file("META-INF/container.xml");
+        if (!containerFile) throw new Error("That EPUB is missing its container metadata.");
+        return containerFile.async("text").then(function (containerXml) {
+          var containerDoc = new DOMParser().parseFromString(containerXml, "application/xml");
+          var rootfile = containerDoc.querySelector("rootfile");
+          var opfPath = rootfile && rootfile.getAttribute("full-path");
+          if (!opfPath || !zip.file(opfPath)) throw new Error("That EPUB is missing its package document.");
+          return zip.file(opfPath).async("text").then(function (opfXml) {
+            return { zip: zip, opfPath: opfPath, opfXml: opfXml };
+          });
+        });
+      })
+      .then(function (data) {
+        var opfDoc = new DOMParser().parseFromString(data.opfXml, "application/xml");
+        var manifest = {};
+        Array.prototype.forEach.call(opfDoc.querySelectorAll("manifest item"), function (item) {
+          manifest[item.getAttribute("id")] = {
+            href: item.getAttribute("href"),
+            mediaType: item.getAttribute("media-type") || ""
+          };
+        });
+        var spineItems = Array.prototype.slice.call(opfDoc.querySelectorAll("spine itemref"))
+          .map(function (itemref) {
+            return manifest[itemref.getAttribute("idref")];
+          })
+          .filter(function (item) {
+            return item && /xhtml|html/i.test(item.mediaType || item.href || "");
+          });
+        if (!spineItems.length) throw new Error("No readable EPUB text files were found.");
+        return Promise.all(
+          spineItems.map(function (item) {
+            var path = resolveZipPath(data.opfPath, item.href);
+            var entry = data.zip.file(path);
+            if (!entry) return "";
+            return entry.async("text").then(extractTextFromDocumentMarkup);
+          })
+        );
+      })
+      .then(function (sections) {
+        var text = normalizeText(sections.filter(Boolean).join("\n\n"));
+        if (!text) throw new Error("No readable EPUB text was found.");
+        return text;
+      });
+  }
+
+  function extractPdfText(file) {
+    var pdfjs = window.pdfjsLib;
+    if (!pdfjs) {
+      return Promise.reject(new Error("PDF import needs PDF.js bundled before it can extract text."));
+    }
+
+    return file.arrayBuffer()
+      .then(function (buffer) {
+        return pdfjs.getDocument({ data: buffer }).promise;
+      })
+      .then(function (pdf) {
+        var pageReads = [];
+        for (var pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+          pageReads.push(
+            pdf.getPage(pageNumber)
+              .then(function (page) {
+                return page.getTextContent();
+              })
+              .then(function (content) {
+                return normalizeText(
+                  content.items
+                    .map(function (item) {
+                      return item.str || "";
+                    })
+                    .join(" ")
+                );
+              })
+          );
+        }
+        return Promise.all(pageReads);
+      })
+      .then(function (pages) {
+        var text = normalizeText(pages.filter(Boolean).join("\n\n"));
+        if (!text) {
+          throw new Error("No selectable PDF text was found. Scanned PDFs are not supported.");
+        }
+        return text;
+      });
   }
 
   function supportedTextFileKind(file) {
@@ -994,6 +1305,13 @@
 
     if (state.activeSource === "link") {
       var url = ui.urlInput.value.trim();
+      var reviewedLinkText = normalizeText(ui.linkPreview.value);
+      if (reviewedLinkText) {
+        state.currentSourceType = "link";
+        state.currentSourceLabel = url || "Reviewed link text";
+        refreshPreparedText(reviewedLinkText, "Link text ready.");
+        return Promise.resolve(true);
+      }
       if (!/^https?:\/\//i.test(url)) {
         setStatus("Paste a valid link first.");
         return Promise.resolve(false);
@@ -1006,6 +1324,7 @@
             throw new Error("No readable text found at that link.");
           }
           ui.linkPreview.value = text;
+          setSourceSnapshot(text);
           state.currentSourceType = "link";
           state.currentSourceLabel = url;
           refreshPreparedText(text, "Link ready.");
@@ -1061,6 +1380,9 @@
   function clearFileOnly() {
     ui.fileInput.value = "";
     ui.filePreview.value = "";
+    currentFile = null;
+    state.sourceSnapshotText = "";
+    state.sourceDirty = false;
     setStatus("File selection cleared.");
     if (state.activeSource === "file") {
       state.rawText = "";
@@ -1073,6 +1395,8 @@
   function clearLinkOnly() {
     ui.urlInput.value = "";
     ui.linkPreview.value = "";
+    state.sourceSnapshotText = "";
+    state.sourceDirty = false;
     if (state.activeSource === "link") {
       state.rawText = "";
       state.currentLibraryId = "";
@@ -1084,14 +1408,8 @@
 
   function readFile(file) {
     if (!file) return;
+    currentFile = file;
     var kind = supportedTextFileKind(file);
-    if (kind === "pdf" || kind === "epub") {
-      setActiveSource("file");
-      ui.filePreview.value = "";
-      setStatus(file.name + " is selected, but " + kind.toUpperCase() + " text extraction needs a parser library before it can be imported.");
-      syncPrepareActions();
-      return;
-    }
     if (kind === "unknown") {
       setActiveSource("file");
       ui.filePreview.value = "";
@@ -1099,10 +1417,30 @@
       syncPrepareActions();
       return;
     }
+    if (kind === "pdf" || kind === "epub") {
+      setActiveSource("file");
+      ui.filePreview.value = "";
+      setStatus("Extracting " + kind.toUpperCase() + " text...");
+      (kind === "pdf" ? extractPdfText(file) : extractEpubText(file))
+        .then(function (text) {
+          ui.filePreview.value = text;
+          setSourceSnapshot(text);
+          state.currentSourceType = "file";
+          state.currentSourceLabel = file.name;
+          refreshPreparedText(text, "Loaded " + file.name + ".");
+          syncPrepareActions();
+        })
+        .catch(function (error) {
+          setStatus(error && error.message ? error.message : "Unable to extract readable text from that file.");
+          syncPrepareActions();
+        });
+      return;
+    }
     var reader = new FileReader();
     reader.onload = function (event) {
       var result = typeof event.target.result === "string" ? event.target.result : "";
       ui.filePreview.value = kind === "rtf" ? stripRtf(result) : normalizeText(result);
+      setSourceSnapshot(ui.filePreview.value);
       state.currentSourceType = "file";
       state.currentSourceLabel = file.name;
       setActiveSource("file");
@@ -1194,6 +1532,12 @@
     ui.cancelAddButton.addEventListener("click", function () {
       setAddPanelOpen(false);
     });
+    ui.reloadSourceButtons.forEach(function (button) {
+      button.addEventListener("click", function () {
+        if (button.disabled) return;
+        reloadActiveSource();
+      });
+    });
     ui.saveLibraryButton.addEventListener("click", function () {
       if (ui.saveLibraryButton.disabled) return;
       handleSaveLibraryAction();
@@ -1226,14 +1570,60 @@
       saveState();
     });
     ui.libraryList.addEventListener("click", function (event) {
-      var loadButton = event.target.closest("[data-library-load]");
+      var menuButton = event.target.closest("[data-item-menu]");
+      var previewButton = event.target.closest("[data-library-preview]");
+      var markReadButton = event.target.closest("[data-library-mark-read]");
+      var markUnreadButton = event.target.closest("[data-library-mark-unread]");
       var deleteButton = event.target.closest("[data-library-delete]");
-      if (loadButton) {
-        loadLibraryItem(loadButton.getAttribute("data-library-load"));
+      var itemEl = event.target.closest("[data-library-item]");
+      if (menuButton) {
+        event.stopPropagation();
+        setItemMenuOpen(menuButton.getAttribute("data-item-menu"));
+      } else if (previewButton) {
+        event.stopPropagation();
+        openPreview(previewButton.getAttribute("data-library-preview"));
+      } else if (markReadButton) {
+        event.stopPropagation();
+        markLibraryItem(markReadButton.getAttribute("data-library-mark-read"), true);
+      } else if (markUnreadButton) {
+        event.stopPropagation();
+        markLibraryItem(markUnreadButton.getAttribute("data-library-mark-unread"), false);
       } else if (deleteButton) {
+        event.stopPropagation();
         deleteLibraryItem(deleteButton.getAttribute("data-library-delete"));
+      } else if (itemEl) {
+        if (event.detail >= 2) {
+          loadLibraryItem(itemEl.getAttribute("data-library-item"));
+        } else {
+          selectLibraryItem(itemEl.getAttribute("data-library-item"));
+        }
       }
     });
+    ui.libraryList.addEventListener("pointerup", function (event) {
+      if (event.pointerType === "mouse") return;
+      var itemEl = event.target.closest("[data-library-item]");
+      if (!itemEl || event.target.closest("button")) return;
+      var id = itemEl.getAttribute("data-library-item");
+      var now = Date.now();
+      if (lastLibraryTap.id === id && now - lastLibraryTap.time < 420) {
+        loadLibraryItem(id);
+        lastLibraryTap = { id: "", time: 0 };
+      } else {
+        lastLibraryTap = { id: id, time: now };
+      }
+    });
+    ui.libraryList.addEventListener("keydown", function (event) {
+      var itemEl = event.target.closest("[data-library-item]");
+      if (!itemEl) return;
+      if (event.key === "Enter") {
+        event.preventDefault();
+        loadLibraryItem(itemEl.getAttribute("data-library-item"));
+      } else if (event.key === " ") {
+        event.preventDefault();
+        selectLibraryItem(itemEl.getAttribute("data-library-item"));
+      }
+    });
+    ui.closePreviewButton.addEventListener("click", closePreview);
     ui.clearSourceButton.addEventListener("click", function () {
       if (state.activeSource === "file") {
         clearFileOnly();
@@ -1265,8 +1655,18 @@
     ui.fileInput.addEventListener("change", function (event) {
       readFile(event.target.files && event.target.files[0]);
     });
+    ui.filePreview.addEventListener("input", function () {
+      if (state.activeSource !== "file") setActiveSource("file");
+      refreshPreparedText(ui.filePreview.value, normalizeText(ui.filePreview.value) ? "File text edited." : "Edit or reload the file text.");
+      updateSourceDirty();
+    });
     ui.urlInput.addEventListener("input", updateUrlNotice);
     ui.urlInput.addEventListener("input", syncPrepareActions);
+    ui.linkPreview.addEventListener("input", function () {
+      if (state.activeSource !== "link") setActiveSource("link");
+      refreshPreparedText(ui.linkPreview.value, normalizeText(ui.linkPreview.value) ? "Link text edited." : "Edit or reload the link text.");
+      updateSourceDirty();
+    });
     ui.sourceText.addEventListener("input", function () {
       if (normalizeText(ui.sourceText.value)) {
         setActiveSource("text");
@@ -1282,6 +1682,12 @@
 
     bindMirroredInputs([ui.wpmRange, ui.drawerWpmRange], "input", function (input) {
       handleWpmChange(input.value);
+    });
+    ui.drawerWpmMinus.addEventListener("click", function () {
+      handleWpmChange(state.wpm - 10);
+    });
+    ui.drawerWpmPlus.addEventListener("click", function () {
+      handleWpmChange(state.wpm + 10);
     });
 
     bindMirroredInputs([ui.chunkSizeSelect, ui.drawerChunkSizeSelect], "change", function (input) {
@@ -1361,6 +1767,9 @@
       } else if (event.key === "Escape" && state.libraryMenuOpen) {
         event.preventDefault();
         setLibraryMenuOpen(false);
+      } else if (event.key === "Escape" && state.previewItemId) {
+        event.preventDefault();
+        closePreview();
       } else if (event.key === "Escape" && state.addPanelOpen) {
         event.preventDefault();
         setAddPanelOpen(false);
@@ -1374,6 +1783,14 @@
       if (!state.libraryMenuOpen) return;
       if (ui.libraryMenu.contains(event.target) || ui.libraryMenuButton.contains(event.target)) return;
       setLibraryMenuOpen(false);
+    });
+
+    document.addEventListener("pointerdown", function (event) {
+      if (!state.itemMenuId) return;
+      if (event.target.closest(".item-menu") || event.target.closest("[data-item-menu]")) return;
+      state.itemMenuId = "";
+      renderLibrary();
+      saveState();
     });
 
     ui.readerPanel.addEventListener("pointerdown", function (event) {
