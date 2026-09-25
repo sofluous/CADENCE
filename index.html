@@ -19,7 +19,7 @@
           <h1>RSVP Reader</h1>
         </div>
         <nav class="tabs" aria-label="Sections" role="tablist">
-          <button id="tab-prepare" class="tab-button is-active" type="button" role="tab" aria-selected="true" aria-controls="panel-prepare" data-tab="prepare">Prepare</button>
+          <button id="tab-library" class="tab-button is-active" type="button" role="tab" aria-selected="true" aria-controls="panel-library" data-tab="library">Library</button>
           <button id="tab-reader" class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="panel-reader" data-tab="reader">Read</button>
         </nav>
         <button id="tab-settings" class="tab-button tab-button-icon" type="button" role="tab" aria-selected="false" aria-controls="panel-settings" data-tab="settings" aria-label="Settings">
@@ -28,80 +28,100 @@
       </header>
 
       <section class="panels">
-        <section id="panel-prepare" class="panel-view is-active" role="tabpanel" aria-labelledby="tab-prepare" data-panel="prepare">
-          <div class="panel-card panel-card-wide">
-            <div class="source-toolbar">
-              <div class="source-picker" role="tablist" aria-label="Source type">
-                <button id="sourceTextButton" class="source-button is-active" type="button" data-source="text" aria-pressed="true">Text</button>
-                <button id="sourceFileButton" class="source-button" type="button" data-source="file" aria-pressed="false">File</button>
-                <button id="sourceLinkButton" class="source-button" type="button" data-source="link" aria-pressed="false">Link</button>
+        <section id="panel-library" class="panel-view is-active" role="tabpanel" aria-labelledby="tab-library" data-panel="library">
+          <div class="library-shell">
+            <section class="panel-card panel-card-wide library-panel">
+              <div class="library-tools" aria-label="Library tools">
+                <label class="sr-only" for="librarySearch">Search Library</label>
+                <input id="librarySearch" type="search" placeholder="Search library" />
+                <div class="view-toggle" role="group" aria-label="Library view">
+                  <button id="libraryViewList" class="view-button is-active" type="button" aria-pressed="true">List</button>
+                  <button id="libraryViewGrid" class="view-button" type="button" aria-pressed="false">Grid</button>
+                </div>
+                <div class="library-menu-wrap">
+                  <button id="libraryMenuButton" class="icon-button meatball-button" type="button" aria-label="Library actions" aria-expanded="false" aria-controls="libraryMenu">
+                    <span aria-hidden="true">&#8942;</span>
+                  </button>
+                  <div id="libraryMenu" class="library-menu" aria-hidden="true">
+                    <p id="librarySummary">No saved items yet.</p>
+                    <button id="clearLibraryButton" class="button button-inline button-inline-static" type="button">Clear Library</button>
+                  </div>
+                </div>
               </div>
-              <button id="clearSourceButton" class="button button-inline button-inline-static" type="button">Clear</button>
-            </div>
-
-            <div class="source-workspace">
-              <section id="sourcePaneText" class="source-pane is-active" data-source-panel="text" aria-label="Text source">
-                <textarea id="sourceText" rows="16" spellcheck="false" placeholder="Paste notes, articles, or draft text here."></textarea>
-              </section>
-
-              <section id="sourcePaneFile" class="source-pane" data-source-panel="file" aria-label="File source" aria-hidden="true">
-                <div class="input-group">
-                  <input id="fileInput" type="file" accept=".txt,.md,text/plain,text/markdown" />
-                  <textarea id="filePreview" class="preview-field" rows="12" spellcheck="false" readonly placeholder="Loaded file text will preview here."></textarea>
-                </div>
-              </section>
-
-              <section id="sourcePaneLink" class="source-pane" data-source-panel="link" aria-label="Link source" aria-hidden="true">
-                <div class="input-group">
-                  <input id="urlInput" type="url" inputmode="url" placeholder="https://example.com/article" />
-                  <textarea id="linkPreview" class="preview-field" rows="12" spellcheck="false" readonly placeholder="Fetched link text will preview here."></textarea>
-                </div>
-              </section>
-            </div>
-
-            <div class="prepare-status-row">
-              <p id="importStatus" class="status-text prepare-status-text" aria-live="polite">Waiting for content.</p>
-            </div>
+              <div id="libraryList" class="library-list" aria-live="polite"></div>
+            </section>
           </div>
+
+          <section id="addPanel" class="add-panel" aria-label="Add library item" aria-hidden="true">
+            <div class="add-panel-card">
+              <div class="source-toolbar">
+                <div class="source-picker" role="tablist" aria-label="Source type">
+                  <button id="sourceTextButton" class="source-button is-active" type="button" data-source="text" aria-pressed="true">Text</button>
+                  <button id="sourceFileButton" class="source-button" type="button" data-source="file" aria-pressed="false">File</button>
+                  <button id="sourceLinkButton" class="source-button" type="button" data-source="link" aria-pressed="false">Link</button>
+                </div>
+                <button id="clearSourceButton" class="button button-inline button-inline-static" type="button">Clear</button>
+              </div>
+
+              <div class="source-workspace">
+                <section id="sourcePaneText" class="source-pane is-active" data-source-panel="text" aria-label="Text source">
+                  <textarea id="sourceText" rows="16" spellcheck="false" placeholder="Paste notes, articles, or draft text here."></textarea>
+                </section>
+
+                <section id="sourcePaneFile" class="source-pane" data-source-panel="file" aria-label="File source" aria-hidden="true">
+                  <div class="input-group">
+                    <input id="fileInput" type="file" accept=".txt,.md,.markdown,.rtf,.pdf,.epub,text/plain,text/markdown,application/rtf,application/pdf,application/epub+zip" />
+                    <textarea id="filePreview" class="preview-field" rows="12" spellcheck="false" readonly placeholder="Loaded file text will preview here."></textarea>
+                  </div>
+                </section>
+
+                <section id="sourcePaneLink" class="source-pane" data-source-panel="link" aria-label="Link source" aria-hidden="true">
+                  <div class="input-group">
+                    <input id="urlInput" type="url" inputmode="url" placeholder="https://example.com/article" />
+                    <textarea id="linkPreview" class="preview-field" rows="12" spellcheck="false" readonly placeholder="Fetched link text will preview here."></textarea>
+                  </div>
+                </section>
+              </div>
+
+              <div class="prepare-status-row">
+                <p id="importStatus" class="status-text prepare-status-text" aria-live="polite">Waiting for content.</p>
+              </div>
+
+            </div>
+          </section>
         </section>
 
         <section id="panel-reader" class="panel-view" role="tabpanel" aria-labelledby="tab-reader" aria-hidden="true" data-panel="reader">
           <div class="reader-panel">
             <section id="readerVisualBar" class="reader-overlay reader-overlay-top" aria-label="Visual controls">
               <div class="overlay-grid overlay-grid-visual">
-                <div class="overlay-field overlay-field-select overlay-field-font">
-                  <label class="sr-only" for="drawerFontSelect">Font</label>
-                  <select id="drawerFontSelect">
-                    <option value="serif">Serif</option>
-                    <option value="sans">Sans</option>
-                    <option value="mono">Mono</option>
-                  </select>
-                </div>
+                <div class="overlay-display-row">
+                  <div class="overlay-field overlay-field-select overlay-field-font">
+                    <label class="sr-only" for="drawerFontSelect">Font</label>
+                    <select id="drawerFontSelect">
+                      <option value="serif">Serif</option>
+                      <option value="sans">Sans</option>
+                      <option value="mono">Mono</option>
+                    </select>
+                  </div>
 
-                <div class="overlay-field overlay-field-select overlay-field-scale">
-                  <label class="sr-only" for="drawerFontScaleSelect">Reader scale</label>
-                  <select id="drawerFontScaleSelect">
-                    <option value="0.8">0.8x</option>
-                    <option value="0.9">0.9x</option>
-                    <option value="1.0" selected>1.0x</option>
-                    <option value="1.1">1.1x</option>
-                    <option value="1.2">1.2x</option>
-                    <option value="1.3">1.3x</option>
-                    <option value="1.4">1.4x</option>
-                    <option value="1.5">1.5x</option>
-                    <option value="1.6">1.6x</option>
-                  </select>
+                  <div class="overlay-field overlay-field-select overlay-field-scale">
+                    <label class="sr-only" for="drawerFontScaleSelect">Reader scale</label>
+                    <select id="drawerFontScaleSelect">
+                      <option value="0.8">0.8x</option>
+                      <option value="0.9">0.9x</option>
+                      <option value="1.0" selected>1.0x</option>
+                      <option value="1.1">1.1x</option>
+                      <option value="1.2">1.2x</option>
+                      <option value="1.3">1.3x</option>
+                      <option value="1.4">1.4x</option>
+                      <option value="1.5">1.5x</option>
+                      <option value="1.6">1.6x</option>
+                    </select>
+                  </div>
                 </div>
 
                 <div class="overlay-toggle-row">
-                  <div class="theme-segmented theme-segmented-inline" role="group" aria-label="Theme">
-                    <button id="drawerThemeLightButton" class="theme-button is-active" type="button" data-theme-option="light" aria-pressed="true">
-                      <span aria-hidden="true">&#9728;</span>
-                    </button>
-                    <button id="drawerThemeDarkButton" class="theme-button" type="button" data-theme-option="dark" aria-pressed="false">
-                      <span aria-hidden="true">&#9790;</span>
-                    </button>
-                  </div>
                   <label class="chip-toggle" for="showFocusLineToggle">
                     <input id="showFocusLineToggle" type="checkbox" checked />
                     <span class="chip-icon" aria-hidden="true">
@@ -127,6 +147,15 @@
                     <input id="focusColorInput" type="color" value="#c83a32" />
                   </div>
                 </div>
+
+                <div class="theme-segmented theme-segmented-inline" role="group" aria-label="Theme">
+                  <button id="drawerThemeLightButton" class="theme-button is-active" type="button" data-theme-option="light" aria-pressed="true">
+                    <span aria-hidden="true">&#9728;</span>
+                  </button>
+                  <button id="drawerThemeDarkButton" class="theme-button" type="button" data-theme-option="dark" aria-pressed="false">
+                    <span aria-hidden="true">&#9790;</span>
+                  </button>
+                </div>
               </div>
             </section>
 
@@ -138,7 +167,7 @@
               </div>
               <div id="readerWord" class="reader-word" aria-live="polite">Ready</div>
               <div id="readerMeasure" class="reader-measure" aria-hidden="true"></div>
-              <p id="readerContext" class="reader-context">Load text in Prepare, then switch back here to read.</p>
+              <p id="readerContext" class="reader-context">Open a library item to read.</p>
             </div>
 
             <section class="reader-progress" aria-label="Reader progress">
@@ -281,8 +310,12 @@
       </section>
 
       <footer id="readerUtilityBar" class="utility-footer" aria-label="Reader status and playback">
-        <div class="prepare-footer-row">
-          <button id="toReaderButton" class="button button-secondary" type="button" disabled>Read</button>
+        <div class="library-footer-row">
+          <button id="openAddButton" class="button button-primary" type="button">Add</button>
+          <div class="add-footer-actions" aria-label="Add item actions">
+            <button id="cancelAddButton" class="button button-secondary" type="button">Cancel</button>
+            <button id="saveLibraryButton" class="button button-primary" type="button" disabled>Confirm</button>
+          </div>
         </div>
         <div class="transport-row">
           <div id="transportBar" class="transport" aria-label="Playback controls">

@@ -2,7 +2,7 @@
   "use strict";
 
   var STORAGE_KEY = "cadence-rsvp-state-v2";
-  var TAB_ORDER = ["prepare", "reader", "settings"];
+  var TAB_ORDER = ["library", "reader", "settings"];
   var ui = {
     body: document.body,
     sourceText: document.getElementById("sourceText"),
@@ -10,8 +10,19 @@
     filePreview: document.getElementById("filePreview"),
     urlInput: document.getElementById("urlInput"),
     linkPreview: document.getElementById("linkPreview"),
+    saveLibraryButton: document.getElementById("saveLibraryButton"),
+    openAddButton: document.getElementById("openAddButton"),
+    cancelAddButton: document.getElementById("cancelAddButton"),
+    addPanel: document.getElementById("addPanel"),
+    clearLibraryButton: document.getElementById("clearLibraryButton"),
+    libraryMenuButton: document.getElementById("libraryMenuButton"),
+    libraryMenu: document.getElementById("libraryMenu"),
+    librarySearch: document.getElementById("librarySearch"),
+    libraryViewList: document.getElementById("libraryViewList"),
+    libraryViewGrid: document.getElementById("libraryViewGrid"),
+    librarySummary: document.getElementById("librarySummary"),
+    libraryList: document.getElementById("libraryList"),
     sourceButtons: Array.prototype.slice.call(document.querySelectorAll("[data-source]")),
-    toReaderButton: document.getElementById("toReaderButton"),
     clearSourceButton: document.getElementById("clearSourceButton"),
     importStatus: document.getElementById("importStatus"),
     readerWord: document.getElementById("readerWord"),
@@ -67,16 +78,24 @@
     effectiveScale: 1,
     maxSafeScale: 1.6,
     punctuationPause: true,
-    activeTab: "prepare",
+    activeTab: "library",
     theme: "light",
     font: "serif",
     activeSource: "text",
+    library: [],
+    currentLibraryId: "",
+    currentSourceLabel: "",
+    currentSourceType: "text",
     showIdleControls: true,
     focusLetterColor: "#c83a32",
     showFocusLine: true,
     showFocusArrows: false,
     controlsOpen: false,
     preparingLink: false,
+    addPanelOpen: false,
+    librarySearch: "",
+    libraryView: "list",
+    libraryMenuOpen: false,
     fitStatus: "unmeasured",
     widestChunkText: "",
     widestChunkWidth: 0,
@@ -148,6 +167,86 @@
     return chunks;
   }
 
+  function makeId(prefix) {
+    return prefix + "-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+  }
+
+  function wordCount(text) {
+    return tokenize(normalizeText(text || ""), 1).length;
+  }
+
+  function formatDuration(milliseconds) {
+    var totalSeconds = Math.floor(milliseconds / 1000);
+    if (totalSeconds < 60) return totalSeconds + "s";
+    var minutes = Math.floor(totalSeconds / 60);
+    var seconds = totalSeconds % 60;
+    if (minutes < 60) return minutes + "m " + seconds + "s";
+    var hours = Math.floor(minutes / 60);
+    var restMinutes = minutes % 60;
+    return hours + "h " + restMinutes + "m";
+  }
+
+  function getSourceLabel(sourceType, fallbackText) {
+    if (sourceType === "link") {
+      try {
+        return new URL(ui.urlInput.value.trim()).hostname;
+      } catch (error) {
+        return "Saved link";
+      }
+    }
+    if (sourceType === "file" && state.currentSourceLabel) return state.currentSourceLabel;
+    var firstLine = normalizeText(fallbackText || "").split("\n")[0] || "Untitled text";
+    return firstLine.slice(0, 72);
+  }
+
+  function createLibraryItem(text, sourceType, sourceLabel) {
+    var normalized = normalizeText(text || "");
+    var now = new Date().toISOString();
+    return {
+      id: makeId("item"),
+      title: getSourceLabel(sourceType, normalized),
+      sourceType: sourceType,
+      sourceLabel: sourceLabel || getSourceLabel(sourceType, normalized),
+      text: normalized,
+      createdAt: now,
+      updatedAt: now,
+      lastReadAt: "",
+      lastIndex: 0,
+      wordCount: wordCount(normalized),
+      chunkCount: tokenize(normalized, state.chunkSize).length,
+      metrics: {
+        sessions: 0,
+        timeSpentMs: 0,
+        chunksRead: 0,
+        weightedSpeed: 0
+      }
+    };
+  }
+
+  function getCurrentLibraryItem() {
+    if (!state.currentLibraryId) return null;
+    return state.library.find(function (item) {
+      return item.id === state.currentLibraryId;
+    }) || null;
+  }
+
+  function averageSpeed(item) {
+    if (!item || !item.metrics || !item.metrics.chunksRead) return 0;
+    return Math.round(item.metrics.weightedSpeed / item.metrics.chunksRead);
+  }
+
+  function libraryTotals() {
+    return state.library.reduce(
+      function (totals, item) {
+        totals.words += item.wordCount || 0;
+        totals.timeSpentMs += item.metrics ? item.metrics.timeSpentMs || 0 : 0;
+        totals.sessions += item.metrics ? item.metrics.sessions || 0 : 0;
+        return totals;
+      },
+      { words: 0, timeSpentMs: 0, sessions: 0 }
+    );
+  }
+
   function saveState() {
     try {
       localStorage.setItem(
@@ -155,6 +254,10 @@
         JSON.stringify({
           rawText: state.rawText,
           index: state.index,
+          library: state.library,
+          currentLibraryId: state.currentLibraryId,
+          currentSourceLabel: state.currentSourceLabel,
+          currentSourceType: state.currentSourceType,
           wpm: state.wpm,
           chunkSize: state.chunkSize,
           fontScale: state.fontScale,
@@ -162,6 +265,10 @@
           maxSafeScale: state.maxSafeScale,
           punctuationPause: state.punctuationPause,
           activeTab: state.activeTab,
+          addPanelOpen: state.addPanelOpen,
+          librarySearch: state.librarySearch,
+          libraryView: state.libraryView,
+          libraryMenuOpen: state.libraryMenuOpen,
           theme: state.theme,
           font: state.font,
           activeSource: state.activeSource,
@@ -190,10 +297,22 @@
       state.effectiveScale = clampNumber(parsed.effectiveScale, 0.8, 1.6, state.fontScale);
       state.maxSafeScale = clampNumber(parsed.maxSafeScale, 0.8, 1.6, 1.6);
       state.punctuationPause = parsed.punctuationPause !== false;
-      state.activeTab = parsed.activeTab === "reader" || parsed.activeTab === "settings" ? parsed.activeTab : "prepare";
+      state.activeTab =
+        parsed.activeTab === "reader" || parsed.activeTab === "settings"
+          ? parsed.activeTab
+          : "library";
       state.theme = parsed.theme === "dark" ? "dark" : "light";
       state.font = parsed.font === "sans" || parsed.font === "mono" ? parsed.font : "serif";
       state.activeSource = parsed.activeSource === "file" || parsed.activeSource === "link" ? parsed.activeSource : "text";
+      state.library = Array.isArray(parsed.library) ? parsed.library.filter(function (item) {
+        return item && typeof item.id === "string" && typeof item.text === "string";
+      }) : [];
+      state.currentLibraryId = typeof parsed.currentLibraryId === "string" ? parsed.currentLibraryId : "";
+      state.currentSourceLabel = typeof parsed.currentSourceLabel === "string" ? parsed.currentSourceLabel : "";
+      state.currentSourceType =
+        parsed.currentSourceType === "file" || parsed.currentSourceType === "link" || parsed.currentSourceType === "library"
+          ? parsed.currentSourceType
+          : "text";
       state.showIdleControls = parsed.showIdleControls !== false;
       state.focusLetterColor =
         typeof parsed.focusLetterColor === "string" && /^#[0-9a-f]{6}$/i.test(parsed.focusLetterColor)
@@ -202,6 +321,10 @@
       state.showFocusLine = parsed.showFocusLine !== false;
       state.showFocusArrows = parsed.showFocusArrows === true;
       state.controlsOpen = parsed.controlsOpen === true;
+      state.addPanelOpen = parsed.addPanelOpen === true;
+      state.librarySearch = typeof parsed.librarySearch === "string" ? parsed.librarySearch : "";
+      state.libraryView = parsed.libraryView === "grid" ? "grid" : "list";
+      state.libraryMenuOpen = parsed.libraryMenuOpen === true;
     } catch (error) {
       console.warn("Unable to load saved state.", error);
     }
@@ -219,6 +342,154 @@
 
   function setStatus(message) {
     ui.importStatus.textContent = message;
+  }
+
+  function renderLibrary() {
+    var totals = libraryTotals();
+    var query = normalizeText(state.librarySearch || "").toLowerCase();
+    var visibleItems = state.library
+      .filter(function (item) {
+        if (!query) return true;
+        return (
+          String(item.title || "").toLowerCase().indexOf(query) >= 0 ||
+          String(item.sourceLabel || "").toLowerCase().indexOf(query) >= 0 ||
+          String(item.sourceType || "").toLowerCase().indexOf(query) >= 0
+        );
+      })
+      .sort(function (left, right) {
+        return String(right.updatedAt || "").localeCompare(String(left.updatedAt || ""));
+      });
+
+    ui.librarySummary.textContent =
+      state.library.length +
+      " items, " +
+      totals.words +
+      " words, " +
+      formatDuration(totals.timeSpentMs) +
+      " reading time.";
+    updateLibraryViewControls();
+
+    if (!state.library.length) {
+      ui.libraryList.innerHTML = '<p class="empty-library">Saved texts, links, and files will appear here.</p>';
+      ui.clearLibraryButton.disabled = true;
+      return;
+    }
+
+    ui.clearLibraryButton.disabled = false;
+    if (!visibleItems.length) {
+      ui.libraryList.innerHTML = '<p class="empty-library">No library items match that search.</p>';
+      return;
+    }
+
+    ui.libraryList.innerHTML = visibleItems
+      .map(function (item) {
+        var progress = item.chunkCount ? Math.round(((item.lastIndex || 0) / item.chunkCount) * 100) : 0;
+        var metrics = item.metrics || {};
+        var activeClass = item.id === state.currentLibraryId ? " is-active" : "";
+        return (
+          '<article class="library-item' + activeClass + '">' +
+          '<div class="library-item-main">' +
+          '<h3>' + escapeHtml(item.title || "Untitled") + "</h3>" +
+          '<p>' +
+          escapeHtml(item.sourceType || "text") +
+          " &middot; " +
+          (item.wordCount || 0) +
+          " words &middot; " +
+          progress +
+          "% read" +
+          "</p>" +
+          '<p class="library-metrics">' +
+          (metrics.sessions || 0) +
+          " sessions &middot; " +
+          formatDuration(metrics.timeSpentMs || 0) +
+          " spent &middot; avg " +
+          (averageSpeed(item) || "-") +
+          " cpm" +
+          "</p>" +
+          "</div>" +
+          '<div class="library-item-actions">' +
+          '<button class="button button-secondary" type="button" data-library-load="' + escapeHtml(item.id) + '">Read</button>' +
+          '<button class="button button-inline button-inline-static" type="button" data-library-delete="' + escapeHtml(item.id) + '">Delete</button>' +
+          "</div>" +
+          "</article>"
+        );
+      })
+      .join("");
+  }
+
+  function upsertCurrentLibraryItem(text, sourceType, sourceLabel) {
+    var normalized = normalizeText(text || "");
+    if (!normalized) return null;
+    var existing = getCurrentLibraryItem();
+    if (existing) {
+      existing.text = normalized;
+      existing.title = existing.title || getSourceLabel(sourceType, normalized);
+      existing.sourceType = sourceType;
+      existing.sourceLabel = sourceLabel || existing.sourceLabel;
+      existing.updatedAt = new Date().toISOString();
+      existing.wordCount = wordCount(normalized);
+      existing.chunkCount = tokenize(normalized, state.chunkSize).length;
+      existing.lastIndex = Math.min(state.index, Math.max(0, existing.chunkCount - 1));
+      return existing;
+    }
+    var item = createLibraryItem(normalized, sourceType, sourceLabel);
+    state.library.unshift(item);
+    state.currentLibraryId = item.id;
+    return item;
+  }
+
+  function savePreparedToLibrary() {
+    return prepareActiveSource().then(function (ready) {
+      if (!ready) return false;
+      var item = upsertCurrentLibraryItem(state.rawText, state.currentSourceType, state.currentSourceLabel);
+      if (!item) return false;
+      setStatus("Saved to Library.");
+      renderLibrary();
+      setAddPanelOpen(false);
+      saveState();
+      return true;
+    });
+  }
+
+  function loadLibraryItem(id) {
+    var item = state.library.find(function (entry) {
+      return entry.id === id;
+    });
+    if (!item) return;
+    stopPlayback();
+    state.currentLibraryId = item.id;
+    state.currentSourceType = "library";
+    state.currentSourceLabel = item.title || "Library item";
+    state.rawText = item.text;
+    state.index = clampNumber(item.lastIndex, 0, Math.max(0, tokenize(item.text, state.chunkSize).length - 1), 0);
+    rebuildChunks(true);
+    setStatus("Loaded from Library.");
+    setActiveTab("reader");
+    renderLibrary();
+    saveState();
+  }
+
+  function deleteLibraryItem(id) {
+    state.library = state.library.filter(function (item) {
+      return item.id !== id;
+    });
+    if (state.currentLibraryId === id) {
+      state.currentLibraryId = "";
+    }
+    renderLibrary();
+    saveState();
+  }
+
+  function recordReadStep(milliseconds) {
+    var item = getCurrentLibraryItem();
+    if (!item) return;
+    item.metrics = item.metrics || { sessions: 0, timeSpentMs: 0, chunksRead: 0, weightedSpeed: 0 };
+    item.metrics.timeSpentMs += milliseconds;
+    item.metrics.chunksRead += 1;
+    item.metrics.weightedSpeed += state.wpm;
+    item.lastIndex = state.index;
+    item.lastReadAt = new Date().toISOString();
+    item.updatedAt = item.lastReadAt;
   }
 
   function setFont(font) {
@@ -255,12 +526,55 @@
   }
 
   function syncPrepareActions() {
-    ui.toReaderButton.disabled = state.preparingLink || !activeSourceHasContent();
+    ui.saveLibraryButton.disabled = state.preparingLink || !activeSourceHasContent();
+  }
+
+  function setAddPanelOpen(open) {
+    state.addPanelOpen = Boolean(open);
+    if (state.addPanelOpen && state.libraryMenuOpen) {
+      state.libraryMenuOpen = false;
+      applyLibraryMenuState();
+    }
+    ui.body.classList.toggle("add-panel-open", state.addPanelOpen);
+    ui.addPanel.setAttribute("aria-hidden", state.addPanelOpen ? "false" : "true");
+    ui.openAddButton.setAttribute("aria-expanded", state.addPanelOpen ? "true" : "false");
+    saveState();
+  }
+
+  function applyLibraryMenuState() {
+    ui.libraryMenu.classList.toggle("is-open", state.libraryMenuOpen);
+    ui.libraryMenu.setAttribute("aria-hidden", state.libraryMenuOpen ? "false" : "true");
+    ui.libraryMenuButton.setAttribute("aria-expanded", state.libraryMenuOpen ? "true" : "false");
+  }
+
+  function setLibraryMenuOpen(open) {
+    state.libraryMenuOpen = Boolean(open);
+    applyLibraryMenuState();
+    saveState();
+  }
+
+  function updateLibraryViewControls() {
+    ui.librarySearch.value = state.librarySearch;
+    ui.libraryList.setAttribute("data-view", state.libraryView);
+    applyLibraryMenuState();
+    [
+      [ui.libraryViewList, "list"],
+      [ui.libraryViewGrid, "grid"]
+    ].forEach(function (entry) {
+      var button = entry[0];
+      var view = entry[1];
+      var active = state.libraryView === view;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+    });
   }
 
   function setActiveTab(tab) {
     if (tab !== "reader" && state.controlsOpen) {
       state.controlsOpen = false;
+    }
+    if (tab !== "library" && state.addPanelOpen) {
+      setAddPanelOpen(false);
     }
     state.activeTab = tab;
     ui.body.setAttribute("data-active-tab", tab);
@@ -453,6 +767,7 @@
 
   function setActiveSource(source) {
     state.activeSource = source === "file" || source === "link" ? source : "text";
+    state.currentLibraryId = "";
     updateSourceUI();
     syncPrepareActions();
     saveState();
@@ -500,6 +815,25 @@
       });
   }
 
+  function stripRtf(input) {
+    return normalizeText(
+      input
+        .replace(/\\par[d]?/g, "\n")
+        .replace(/\\'[0-9a-fA-F]{2}/g, " ")
+        .replace(/[{}]/g, "")
+        .replace(/\\[a-zA-Z]+-?\d* ?/g, "")
+    );
+  }
+
+  function supportedTextFileKind(file) {
+    var name = (file.name || "").toLowerCase();
+    if (/\.(txt|md|markdown)$/.test(name) || /^text\/(plain|markdown)/i.test(file.type)) return "text";
+    if (/\.rtf$/.test(name) || /rtf/i.test(file.type)) return "rtf";
+    if (/\.pdf$/.test(name) || /pdf/i.test(file.type)) return "pdf";
+    if (/\.epub$/.test(name) || /epub/i.test(file.type)) return "epub";
+    return "unknown";
+  }
+
   function currentChunk() {
     if (!state.chunks.length) return "";
     return state.chunks[Math.min(state.index, state.chunks.length - 1)] || "";
@@ -525,7 +859,7 @@
     ui.readerWord.innerHTML = renderChunkMarkup(chunk);
 
     if (!state.chunks.length) {
-      ui.readerContext.textContent = "Load text in Prepare, then switch back here to read.";
+      ui.readerContext.textContent = "Open a library item to read.";
       ui.progressText.textContent = "0 of 0 chunks";
       ui.remainingText.textContent = "Estimated remaining: 0s";
       ui.progressBar.max = "0";
@@ -554,6 +888,13 @@
     ui.playPauseButton.disabled = false;
     ui.backButton.disabled = state.index === 0;
     ui.forwardButton.disabled = state.index >= state.chunks.length - 1;
+    var item = getCurrentLibraryItem();
+    if (item) {
+      item.lastIndex = state.index;
+      item.chunkCount = state.chunks.length;
+      item.wordCount = wordCount(state.rawText);
+      renderLibrary();
+    }
     syncPrepareActions();
   }
 
@@ -587,6 +928,7 @@
         stopPlayback();
         return;
       }
+      recordReadStep(delay);
       state.index += 1;
       saveState();
       updateReader();
@@ -596,11 +938,18 @@
 
   function startPlayback() {
     if (!state.chunks.length) {
-      setStatus("Prepare some text before starting playback.");
-      setActiveTab("prepare");
+      setStatus("Add or open a library item before starting playback.");
+      setActiveTab("library");
       return;
     }
     state.playing = true;
+    var item = getCurrentLibraryItem();
+    if (item) {
+      item.metrics = item.metrics || { sessions: 0, timeSpentMs: 0, chunksRead: 0, weightedSpeed: 0 };
+      item.metrics.sessions += 1;
+      item.lastReadAt = new Date().toISOString();
+      item.updatedAt = item.lastReadAt;
+    }
     ui.playPauseButton.textContent = "Pause";
     enterPlaybackMode();
     updateReader();
@@ -638,6 +987,7 @@
         setStatus("Choose a file first, then prepare it.");
         return Promise.resolve(false);
       }
+      state.currentSourceType = "file";
       refreshPreparedText(fileSource, "File ready.");
       return Promise.resolve(true);
     }
@@ -656,6 +1006,8 @@
             throw new Error("No readable text found at that link.");
           }
           ui.linkPreview.value = text;
+          state.currentSourceType = "link";
+          state.currentSourceLabel = url;
           refreshPreparedText(text, "Link ready.");
           return true;
         })
@@ -676,6 +1028,8 @@
       refreshPreparedText("", "Paste text or import a file to prepare the reader.");
       return Promise.resolve(false);
     }
+    state.currentSourceType = "text";
+    state.currentSourceLabel = "Pasted text";
     refreshPreparedText(source, "Text ready.");
     return Promise.resolve(true);
   }
@@ -687,11 +1041,18 @@
     });
   }
 
+  function handleSaveLibraryAction() {
+    savePreparedToLibrary();
+  }
+
   function clearTextOnly() {
     ui.sourceText.value = "";
     state.rawText = "";
     state.chunks = [];
     state.index = 0;
+    state.currentLibraryId = "";
+    state.currentSourceType = "text";
+    state.currentSourceLabel = "";
     rebuildChunks(false);
     setStatus("Text cleared.");
     syncPrepareActions();
@@ -703,6 +1064,7 @@
     setStatus("File selection cleared.");
     if (state.activeSource === "file") {
       state.rawText = "";
+      state.currentLibraryId = "";
       rebuildChunks(false);
     }
     syncPrepareActions();
@@ -713,6 +1075,7 @@
     ui.linkPreview.value = "";
     if (state.activeSource === "link") {
       state.rawText = "";
+      state.currentLibraryId = "";
       rebuildChunks(false);
     }
     updateUrlNotice();
@@ -721,10 +1084,27 @@
 
   function readFile(file) {
     if (!file) return;
+    var kind = supportedTextFileKind(file);
+    if (kind === "pdf" || kind === "epub") {
+      setActiveSource("file");
+      ui.filePreview.value = "";
+      setStatus(file.name + " is selected, but " + kind.toUpperCase() + " text extraction needs a parser library before it can be imported.");
+      syncPrepareActions();
+      return;
+    }
+    if (kind === "unknown") {
+      setActiveSource("file");
+      ui.filePreview.value = "";
+      setStatus("That file type is not readable yet. Try TXT, Markdown, or RTF.");
+      syncPrepareActions();
+      return;
+    }
     var reader = new FileReader();
     reader.onload = function (event) {
       var result = typeof event.target.result === "string" ? event.target.result : "";
-      ui.filePreview.value = normalizeText(result);
+      ui.filePreview.value = kind === "rtf" ? stripRtf(result) : normalizeText(result);
+      state.currentSourceType = "file";
+      state.currentSourceLabel = file.name;
       setActiveSource("file");
       refreshPreparedText(ui.filePreview.value, "Loaded " + file.name + ".");
       syncPrepareActions();
@@ -807,9 +1187,52 @@
       });
     });
 
-    ui.toReaderButton.addEventListener("click", function () {
-      if (ui.toReaderButton.disabled) return;
-      handleReadAction();
+    ui.openAddButton.addEventListener("click", function () {
+      setActiveTab("library");
+      setAddPanelOpen(true);
+    });
+    ui.cancelAddButton.addEventListener("click", function () {
+      setAddPanelOpen(false);
+    });
+    ui.saveLibraryButton.addEventListener("click", function () {
+      if (ui.saveLibraryButton.disabled) return;
+      handleSaveLibraryAction();
+    });
+    ui.librarySearch.addEventListener("input", function () {
+      state.librarySearch = ui.librarySearch.value;
+      renderLibrary();
+      saveState();
+    });
+    ui.libraryViewList.addEventListener("click", function () {
+      state.libraryView = "list";
+      renderLibrary();
+      saveState();
+    });
+    ui.libraryViewGrid.addEventListener("click", function () {
+      state.libraryView = "grid";
+      renderLibrary();
+      saveState();
+    });
+    ui.libraryMenuButton.addEventListener("click", function () {
+      setLibraryMenuOpen(!state.libraryMenuOpen);
+    });
+    ui.clearLibraryButton.addEventListener("click", function () {
+      if (!state.library.length) return;
+      if (!window.confirm("Clear all saved library items and metrics?")) return;
+      state.library = [];
+      state.currentLibraryId = "";
+      setLibraryMenuOpen(false);
+      renderLibrary();
+      saveState();
+    });
+    ui.libraryList.addEventListener("click", function (event) {
+      var loadButton = event.target.closest("[data-library-load]");
+      var deleteButton = event.target.closest("[data-library-delete]");
+      if (loadButton) {
+        loadLibraryItem(loadButton.getAttribute("data-library-load"));
+      } else if (deleteButton) {
+        deleteLibraryItem(deleteButton.getAttribute("data-library-delete"));
+      }
     });
     ui.clearSourceButton.addEventListener("click", function () {
       if (state.activeSource === "file") {
@@ -935,10 +1358,22 @@
       } else if (event.key.toLowerCase() === "m" && state.activeTab === "reader") {
         event.preventDefault();
         setControlsOpen(!state.controlsOpen);
+      } else if (event.key === "Escape" && state.libraryMenuOpen) {
+        event.preventDefault();
+        setLibraryMenuOpen(false);
+      } else if (event.key === "Escape" && state.addPanelOpen) {
+        event.preventDefault();
+        setAddPanelOpen(false);
       } else if (event.key === "Escape" && state.playing) {
         event.preventDefault();
         stopPlayback();
       }
+    });
+
+    document.addEventListener("pointerdown", function (event) {
+      if (!state.libraryMenuOpen) return;
+      if (ui.libraryMenu.contains(event.target) || ui.libraryMenuButton.contains(event.target)) return;
+      setLibraryMenuOpen(false);
     });
 
     ui.readerPanel.addEventListener("pointerdown", function (event) {
@@ -960,11 +1395,14 @@
   function init() {
     loadState();
     ui.sourceText.value = state.rawText;
+    ui.librarySearch.value = state.librarySearch;
     updateSettingsUI();
     rebuildChunks(true);
-    updateUrlNotice();
+    renderLibrary();
     attachEvents();
     setActiveTab(state.activeTab);
+    setAddPanelOpen(state.activeTab === "library" && state.addPanelOpen);
+    applyLibraryMenuState();
     syncPrepareActions();
 
     if (state.rawText) {
