@@ -758,7 +758,7 @@
     ui.tabButtons.forEach(function (button) {
       var isActive = button.getAttribute("data-tab") === tab;
       button.classList.toggle("is-active", isActive);
-      button.setAttribute("aria-selected", isActive ? "true" : "false");
+      button.hidden = isActive || (button.getAttribute("data-tab") === "reader" && !state.chunks.length);
     });
     ui.tabPanels.forEach(function (panel) {
       var panelTab = panel.getAttribute("data-panel");
@@ -766,6 +766,7 @@
       var isActive = panelTab === tab;
       panel.classList.toggle("is-active", isActive);
       panel.setAttribute("aria-hidden", isActive ? "false" : "true");
+      panel.inert = !isActive;
       panel.setAttribute("data-state", panelIndex < activeIndex ? "before" : panelIndex > activeIndex ? "after" : "active");
     });
     saveState();
@@ -860,6 +861,7 @@
     ui.readerMenuButton.classList.toggle("is-active", state.controlsOpen);
     ui.readerMenuButton.setAttribute("aria-expanded", state.controlsOpen ? "true" : "false");
     ui.readerMenuButton.setAttribute("aria-pressed", state.controlsOpen ? "true" : "false");
+    document.getElementById("readerVisualBar").inert = !state.controlsOpen || state.playing;
     ui.focusLine.hidden = !state.showFocusLine;
     ui.focusArrows.hidden = !state.showFocusArrows;
   }
@@ -1166,6 +1168,7 @@
   }
 
   function updateReader() {
+    document.getElementById("tab-reader").hidden = state.activeTab === "reader" || !state.chunks.length;
     var chunk = currentChunk();
     ui.readerWord.innerHTML = renderChunkMarkup(chunk);
 
@@ -1457,6 +1460,9 @@
     var tab = event.currentTarget.getAttribute("data-tab");
     if (state.playing && tab !== "reader") return;
     setActiveTab(tab);
+    var destination = document.querySelector('[data-panel="' + tab + '"]');
+    destination.setAttribute("tabindex", "-1");
+    destination.focus();
   }
 
   function setControlsOpen(open) {
@@ -1739,6 +1745,7 @@
         target instanceof HTMLTextAreaElement ||
         target instanceof HTMLSelectElement;
       if (isTyping) return;
+      if (target.closest("button, a") && !state.playing) return;
 
       if (
         state.playing &&

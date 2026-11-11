@@ -18,17 +18,17 @@
           <p class="eyebrow">Cadence</p>
           <h1>RSVP Reader</h1>
         </div>
-        <nav class="tabs" aria-label="Sections" role="tablist">
-          <button id="tab-library" class="tab-button is-active" type="button" role="tab" aria-selected="true" aria-controls="panel-library" data-tab="library">Library</button>
-          <button id="tab-reader" class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="panel-reader" data-tab="reader">Read</button>
+        <nav class="tabs" aria-label="Navigation">
+          <button id="tab-library" class="button button-secondary" type="button" aria-controls="panel-library" data-tab="library">Library</button>
         </nav>
-        <button id="tab-settings" class="tab-button tab-button-icon" type="button" role="tab" aria-selected="false" aria-controls="panel-settings" data-tab="settings" aria-label="Settings">
+        <button id="tab-settings" class="icon-button" type="button" aria-controls="panel-settings" data-tab="settings" aria-label="Settings" title="Settings">
           <span class="gear-icon" aria-hidden="true">&#9881;</span>
         </button>
       </header>
+      <button id="tab-reader" class="button button-primary resume-button" type="button" aria-controls="panel-reader" data-tab="reader" hidden>Resume</button>
 
       <section class="panels">
-        <section id="panel-library" class="panel-view is-active" role="tabpanel" aria-labelledby="tab-library" data-panel="library">
+        <section id="panel-library" class="panel-view is-active" role="region" aria-label="Library" data-panel="library">
           <div class="library-shell">
             <section class="panel-card panel-card-wide library-panel">
               <div class="library-tools" aria-label="Library tools">
@@ -50,7 +50,7 @@
               </div>
               <div id="libraryList" class="library-list" aria-live="polite"></div>
               <div class="library-panel-actions">
-                <button id="openAddButton" class="button button-primary" type="button">Add</button>
+                <button id="openAddButton" class="button button-primary" type="button" aria-label="Add content" title="Add content">+ Add</button>
               </div>
             </section>
           </div>
@@ -116,7 +116,7 @@
           </section>
         </section>
 
-        <section id="panel-reader" class="panel-view" role="tabpanel" aria-labelledby="tab-reader" aria-hidden="true" data-panel="reader">
+        <section id="panel-reader" class="panel-view" role="region" aria-label="Reader" aria-hidden="true" data-panel="reader">
           <div class="reader-panel">
             <section id="readerVisualBar" class="reader-overlay reader-overlay-top" aria-label="Visual controls">
               <div class="overlay-grid overlay-grid-visual">
@@ -219,7 +219,7 @@
               <div class="overlay-progress">
                 <div class="transport-row">
                   <div id="transportBar" class="transport" aria-label="Playback controls">
-                    <button id="backButton" class="button button-secondary" type="button">Back</button>
+                    <button id="backButton" class="button button-secondary" type="button">Prev</button>
                     <button id="playPauseButton" class="button button-primary" type="button">Play</button>
                     <button id="forwardButton" class="button button-secondary" type="button">Next</button>
                   </div>
@@ -241,7 +241,7 @@
           </div>
         </section>
 
-        <section id="panel-settings" class="panel-view" role="tabpanel" aria-labelledby="tab-settings" aria-hidden="true" data-panel="settings">
+        <section id="panel-settings" class="panel-view" role="region" aria-label="Settings" aria-hidden="true" data-panel="settings">
           <div class="settings-shell">
             <div class="settings-grid">
             <section class="panel-card panel-card-settings">

@@ -15,3 +15,5 @@ Run `node --check app.js` with Node (validated with 24.14.1). No automated app/b
 `index.html`, `app.js`, and `styles.css` are runtime inputs. `vendor/` contains required local JSZip/PDF.js and PDF worker files; see [parser notes](vendor/README.md). Keep their relative layout intact. No hosting configuration is supplied; review delivery inputs independently of Git ignore rules.
 
 See [AGENTS.md](AGENTS.md) for engineering constraints. Optional full-workspace context lives at `../_docs/README.md`; serving does not depend on it.
+
+Responsive layout regression: `node tests/mobile-layout.cjs` uses installed Windows Edge without packages. Override the executable with `CADENCE_BROWSER`; optionally set `CADENCE_EVIDENCE_DIR` for screenshots. Checks cover portrait/landscape bounds, overlay fit, stable playback geometry, pointer pause and contextual navigation. This does not replace import, storage or accessibility testing.
